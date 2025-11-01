@@ -39,6 +39,7 @@ if (!deployStack || deployStack === 'MainInfraStack') {
   });
 }
 
+
 // Pipeline stacks - CI/CD automation
 if (!deployStack || deployStack === 'PipelineInfraStack') {
   new PipelineInfraStack(app, `${appPrefix}PipelineInfraStack`, {
