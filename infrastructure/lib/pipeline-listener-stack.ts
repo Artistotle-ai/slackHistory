@@ -73,6 +73,7 @@ export class PipelineListenerStack extends cdk.Stack {
       pipelineName: `${appPrefix}MessageListenerPipeline`,
       artifactBucket: artifactBucket,
       role: ciRole,
+      pipelineType: codepipeline.PipelineType.V2,
     });
 
     // Source stage - GitHub source with path filter

@@ -75,6 +75,7 @@ export class PipelineDdbStreamStack extends cdk.Stack {
       pipelineName: `${appPrefix}FileProcessorPipeline`,
       artifactBucket: artifactBucket,
       role: ciRole,
+      pipelineType: codepipeline.PipelineType.V2,
     });
 
     // Source stage - GitHub source with path filter

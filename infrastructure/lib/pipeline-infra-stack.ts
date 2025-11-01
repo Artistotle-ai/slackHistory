@@ -117,6 +117,7 @@ export class PipelineInfraStack extends cdk.Stack {
       pipelineName: `${appPrefix}InfraPipeline`,
       artifactBucket: artifactBucket,
       role: ciRole,
+      pipelineType: codepipeline.PipelineType.V2,
     });
 
     // Source stage - GitHub source
