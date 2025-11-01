@@ -75,28 +75,11 @@ export class PipelineInfraStack extends cdk.Stack {
 
     // TODO: Add CloudFormation and CDK permissions to CodeBuild roles
 
-    // CodePipeline for infrastructure deployment with file path triggers
+    // CodePipeline for infrastructure deployment
     const pipeline = new codepipeline.Pipeline(this, 'InfraPipeline', {
       pipelineName: `${appPrefix}InfraPipeline`,
       artifactBucket: artifactBucket,
       pipelineType: codepipeline.PipelineType.V2,
-      triggers: [
-        {
-          providerType: codepipeline.ProviderType.CODE_STAR_SOURCE_CONNECTION,
-          gitConfiguration: {
-            sourceAction: 'GitHub_Source' as any,
-            pushFilter: [
-              {
-                tagsExcludes: [],
-                tagsIncludes: [],
-                filePaths: {
-                  includes: ['infrastructure/**/*', 'slack/**/*', 'docs/**/*'],
-                },
-              },
-            ],
-          },
-        },
-      ],
     });
 
     // Source stage - GitHub source via CodeStar connection
@@ -108,7 +91,7 @@ export class PipelineInfraStack extends cdk.Stack {
       branch: 'main',
       connectionArn: githubConnectionArn, // Uses connection created in BaseRolesStack
       output: sourceOutput,
-      triggerOnPush: false, // Triggers are configured at pipeline level
+      triggerOnPush: true,
     });
 
     pipeline.addStage({
