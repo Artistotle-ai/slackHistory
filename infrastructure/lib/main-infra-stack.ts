@@ -97,6 +97,7 @@ export class MainInfraStack extends cdk.Stack {
     this.messageListenerFunction = new lambda.Function(this, 'MessageListenerFunction', {
       functionName: `${appPrefix}MessageListener`,
       runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
       code: lambda.Code.fromAsset('../message-listener/src'), // TODO: Update path when Lambda code is ready
       handler: 'index.handler',
       role: lambdaExecutionRole,
@@ -122,6 +123,7 @@ export class MainInfraStack extends cdk.Stack {
     this.fileProcessorFunction = new lambda.Function(this, 'FileProcessorFunction', {
       functionName: `${appPrefix}FileProcessor`,
       runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
       code: lambda.Code.fromAsset('../file-processor/src'), // TODO: Update path when Lambda code is ready
       handler: 'index.handler',
       role: lambdaExecutionRole,

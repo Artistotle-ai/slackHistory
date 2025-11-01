@@ -68,7 +68,7 @@ export class PipelineDdbStreamStack extends cdk.Stack {
         },
       }),
       environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_8_0,
+        buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_ARM_2,
         environmentVariables: {
           ARTIFACT_BUCKET: {
             value: artifactBucket.bucketName,
