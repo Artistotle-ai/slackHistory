@@ -52,10 +52,11 @@ repo/
    - Lambda permissions: DDB access, S3 write, Secrets Manager read
 
 3. **Pipeline stacks**
-   - **Infra pipeline**: triggers on main branch pushes, combined CDK build & deploy (no approval steps)
-   - **Listener pipeline**: triggers on main branch pushes, combined Lambda build & deploy
-   - **DDB stream pipeline**: triggers on main branch pushes, combined Lambda build & deploy
-   - *Note*: CodeStar connections don't support folder-based filtering; all pipelines trigger on any main branch push
+   - **Infra pipeline**: triggers on `infrastructure/`, `slack/`, `docs/` file changes in main branch
+   - **Listener pipeline**: triggers on `message-listener/`, `slack-shared/` file changes in main branch  
+   - **DDB stream pipeline**: triggers on `file-processor/`, `slack-shared/` file changes in main branch
+   - Combined CDK build & deploy (no approval steps)
+   - File path filtering configured at Pipeline level using V2 triggers
 
 ## Cross-Stack Dependencies
 Pipeline stacks create their own dedicated CI roles and use static resource references to avoid cyclic dependencies. Each pipeline is self-contained and doesn't depend on other stacks.

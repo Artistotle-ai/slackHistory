@@ -86,11 +86,31 @@ export class PipelineListenerStack extends cdk.Stack {
       resources: [`arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:MnemosyneMessageListener`],
     }));
 
-    // CodePipeline for message-listener deployment
+    // CodePipeline for message-listener deployment with file path triggers
     const pipeline = new codepipeline.Pipeline(this, 'ListenerPipeline', {
       pipelineName: `${appPrefix}MessageListenerPipeline`,
       artifactBucket: artifactBucket,
       pipelineType: codepipeline.PipelineType.V2,
+      triggers: [
+        {
+          providerType: codepipeline.ProviderType.CODE_STAR_SOURCE_CONNECTION,
+          gitConfiguration: {
+            sourceAction: 'GitHub_Source' as any,
+            pushFilter: [
+              {
+                tagsExcludes: [],
+                tagsIncludes: [],
+                branches: {
+                  includes: ['main'],
+                },
+                filePaths: {
+                  includes: ['message-listener/**/*', 'slack-shared/**/*'],
+                },
+              },
+            ],
+          },
+        },
+      ],
     });
 
     // Source stage - GitHub source via CodeStar connection
@@ -102,7 +122,7 @@ export class PipelineListenerStack extends cdk.Stack {
       branch: 'main',
       connectionArn: githubConnectionArn, // Uses connection created in BaseRolesStack
       output: sourceOutput,
-      triggerOnPush: true,
+      triggerOnPush: false, // Triggers are configured at pipeline level
     });
 
     pipeline.addStage({
