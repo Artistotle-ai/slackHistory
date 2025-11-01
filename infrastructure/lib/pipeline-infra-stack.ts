@@ -58,7 +58,28 @@ export class PipelineInfraStack extends cdk.Stack {
     // Grant CodeBuild permissions
     artifactBucket.grantReadWrite(cdkBuildDeployProject);
 
-    // TODO: Add CloudFormation and CDK permissions to CodeBuild roles
+    // Add SSM permissions for CDK bootstrap version check
+    cdkBuildDeployProject.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['ssm:GetParameter'],
+      resources: [`arn:aws:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter/cdk-bootstrap/*`],
+    }));
+
+    // Add CloudFormation permissions for CDK deployments
+    cdkBuildDeployProject.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'cloudformation:*',
+        's3:*',
+        'iam:*',
+        'lambda:*',
+        'dynamodb:*',
+        'secretsmanager:*',
+        'kms:*',
+        'codeconnections:UseConnection',
+      ],
+      resources: ['*'], // TODO: Restrict to specific resources for security
+    }));
 
     // CodePipeline for infrastructure deployment
     const pipeline = new codepipeline.Pipeline(this, 'InfraPipeline', {
