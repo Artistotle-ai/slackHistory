@@ -25,34 +25,11 @@ export class PipelineInfraStack extends cdk.Stack {
     // Create references using static names
     const artifactBucket = s3.Bucket.fromBucketName(this, 'ArtifactBucket', artifactBucketName);
 
-    // Create dedicated CI role for this pipeline stack
-    const ciRole = new iam.Role(this, 'PipelineCiRole', {
-      roleName: `${appPrefix}InfraPipelineCiRole`,
-      assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
-      description: 'CI role for infrastructure pipeline',
-    });
-
-    // Add necessary permissions for CDK deployment
-    ciRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'cloudformation:*',
-        's3:*',
-        'iam:*',
-        'lambda:*',
-        'dynamodb:*',
-        'secretsmanager:*',
-        'kms:*',
-        'codeconnections:UseConnection',
-      ],
-      resources: ['*'], // TODO: Restrict to specific resources for security
-    }));
-
-    // Create pipeline with references
-    this.createPipeline(appPrefix, artifactBucket, ciRole);
+    // Create pipeline - let CodePipeline create its own service roles
+    this.createPipeline(appPrefix, artifactBucket);
   }
 
-  private createPipeline(appPrefix: string, artifactBucket: s3.IBucket, ciRole: iam.IRole) {
+  private createPipeline(appPrefix: string, artifactBucket: s3.IBucket) {
     // Reference GitHub connection created in BaseRolesStack
     const githubConnectionArn = `arn:aws:codeconnections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/*`;
 
@@ -121,7 +98,6 @@ export class PipelineInfraStack extends cdk.Stack {
     const pipeline = new codepipeline.Pipeline(this, 'InfraPipeline', {
       pipelineName: `${appPrefix}InfraPipeline`,
       artifactBucket: artifactBucket,
-      role: ciRole,
       pipelineType: codepipeline.PipelineType.V2,
     });
 

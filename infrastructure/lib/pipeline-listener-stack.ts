@@ -25,31 +25,11 @@ export class PipelineListenerStack extends cdk.Stack {
     // Create references using static names
     const artifactBucket = s3.Bucket.fromBucketName(this, 'ArtifactBucket', artifactBucketName);
 
-    // Create dedicated CI role for this pipeline stack
-    const ciRole = new iam.Role(this, 'PipelineCiRole', {
-      roleName: `${appPrefix}MessageListenerPipelineCiRole`,
-      assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
-      description: 'CI role for message listener pipeline',
-    });
-
-    // Add necessary permissions for Lambda deployment
-    ciRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'lambda:*',
-        'iam:*',
-        's3:*',
-        'cloudformation:*',
-        'codeconnections:UseConnection',
-      ],
-      resources: ['*'], // TODO: Restrict to specific resources for security
-    }));
-
-    // Create pipeline with references
-    this.createPipeline(appPrefix, artifactBucket, ciRole);
+    // Create pipeline - let CodePipeline create its own service roles
+    this.createPipeline(appPrefix, artifactBucket);
   }
 
-  private createPipeline(appPrefix: string, artifactBucket: s3.IBucket, ciRole: iam.IRole) {
+  private createPipeline(appPrefix: string, artifactBucket: s3.IBucket) {
     // Reference GitHub connection created in BaseRolesStack
     const githubConnectionArn = `arn:aws:codeconnections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/*`;
 
@@ -76,7 +56,6 @@ export class PipelineListenerStack extends cdk.Stack {
     const pipeline = new codepipeline.Pipeline(this, 'ListenerPipeline', {
       pipelineName: `${appPrefix}MessageListenerPipeline`,
       artifactBucket: artifactBucket,
-      role: ciRole,
       pipelineType: codepipeline.PipelineType.V2,
     });
 
