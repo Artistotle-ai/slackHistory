@@ -101,9 +101,6 @@ export class PipelineDdbStreamStack extends cdk.Stack {
               {
                 tagsExcludes: [],
                 tagsIncludes: [],
-                branches: {
-                  includes: ['main'],
-                },
                 filePaths: {
                   includes: ['file-processor/**/*', 'slack-shared/**/*'],
                 },

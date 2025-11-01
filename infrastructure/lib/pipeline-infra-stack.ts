@@ -84,14 +84,11 @@ export class PipelineInfraStack extends cdk.Stack {
         {
           providerType: codepipeline.ProviderType.CODE_STAR_SOURCE_CONNECTION,
           gitConfiguration: {
-            sourceAction: 'GitHub_Source' as any, // Will be set after action is added
+            sourceAction: 'GitHub_Source' as any,
             pushFilter: [
               {
                 tagsExcludes: [],
                 tagsIncludes: [],
-                branches: {
-                  includes: ['main'],
-                },
                 filePaths: {
                   includes: ['infrastructure/**/*', 'slack/**/*', 'docs/**/*'],
                 },

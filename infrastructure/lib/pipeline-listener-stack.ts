@@ -100,9 +100,6 @@ export class PipelineListenerStack extends cdk.Stack {
               {
                 tagsExcludes: [],
                 tagsIncludes: [],
-                branches: {
-                  includes: ['main'],
-                },
                 filePaths: {
                   includes: ['message-listener/**/*', 'slack-shared/**/*'],
                 },
