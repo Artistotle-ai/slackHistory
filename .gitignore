@@ -63,8 +63,6 @@ lerna-debug.log*
 .node_repl_history
 *.tgz
 .yarn/
-package-lock.json
-!infrastructure/package-lock.json
 yarn.lock
 
 # CDK
