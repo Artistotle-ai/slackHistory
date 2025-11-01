@@ -67,7 +67,7 @@ export class PipelineListenerStack extends cdk.Stack {
         },
       }),
       environment: {
-        buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2023_ARM_3,
+        buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_ARM_3,
         environmentVariables: {
           ARTIFACT_BUCKET: {
             value: artifactBucket.bucketName,
@@ -103,14 +103,6 @@ export class PipelineListenerStack extends cdk.Stack {
       connectionArn: githubConnectionArn, // Uses connection created in BaseRolesStack
       output: sourceOutput,
       triggerOnPush: true,
-      filterGroups: [
-        codepipeline_actions.FilterGroup.create('MessageListenerFilter', {
-          filters: [
-            codepipeline_actions.Filter.pattern('message-listener/**/*'),
-            codepipeline_actions.Filter.pattern('slack-shared/**/*'),
-          ],
-        }),
-      ],
     });
 
     pipeline.addStage({

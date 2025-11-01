@@ -66,7 +66,7 @@ export class PipelineInfraStack extends cdk.Stack {
         },
       }),
       environment: {
-        buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2023_ARM_3,
+        buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_ARM_3,
       },
     });
 
@@ -92,15 +92,6 @@ export class PipelineInfraStack extends cdk.Stack {
       connectionArn: githubConnectionArn, // Uses connection created in BaseRolesStack
       output: sourceOutput,
       triggerOnPush: true,
-      filterGroups: [
-        codepipeline_actions.FilterGroup.create('InfraFilter', {
-          filters: [
-            codepipeline_actions.Filter.pattern('infrastructure/**/*'),
-            codepipeline_actions.Filter.pattern('slack/**/*'),
-            codepipeline_actions.Filter.pattern('docs/**/*'),
-          ],
-        }),
-      ],
     });
 
     pipeline.addStage({
