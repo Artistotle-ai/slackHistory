@@ -67,7 +67,7 @@ export class PipelineListenerStack extends cdk.Stack {
         },
       }),
       environment: {
-        buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_ARM_2,
+        buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2023_ARM_3,
         environmentVariables: {
           ARTIFACT_BUCKET: {
             value: artifactBucket.bucketName,
