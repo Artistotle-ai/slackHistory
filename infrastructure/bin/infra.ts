@@ -18,30 +18,43 @@ const env = {
 // TODO: Define specific resource names and configurations
 const appPrefix = 'Mnemosyne';
 
+// Check for stack selection via environment variable
+const deployStack = process.env.DEPLOY_STACK;
+
 // Base roles stack (deploy first)
-new BaseRolesStack(app, `${appPrefix}BaseRolesStack`, {
-  env,
-  appPrefix,
-});
+if (!deployStack || deployStack === 'BaseRolesStack') {
+  new BaseRolesStack(app, `${appPrefix}BaseRolesStack`, {
+    env,
+    appPrefix,
+  });
+}
 
 // Main infrastructure stack
-new MainInfraStack(app, `${appPrefix}MainInfraStack`, {
-  env,
-  appPrefix,
-});
+if (!deployStack || deployStack === 'MainInfraStack') {
+  new MainInfraStack(app, `${appPrefix}MainInfraStack`, {
+    env,
+    appPrefix,
+  });
+}
 
 // Pipeline stacks
-new PipelineInfraStack(app, `${appPrefix}PipelineInfraStack`, {
-  env,
-  appPrefix,
-});
+if (!deployStack || deployStack === 'PipelineInfraStack') {
+  new PipelineInfraStack(app, `${appPrefix}PipelineInfraStack`, {
+    env,
+    appPrefix,
+  });
+}
 
-new PipelineListenerStack(app, `${appPrefix}PipelineListenerStack`, {
-  env,
-  appPrefix,
-});
+if (!deployStack || deployStack === 'PipelineListenerStack') {
+  new PipelineListenerStack(app, `${appPrefix}PipelineListenerStack`, {
+    env,
+    appPrefix,
+  });
+}
 
-new PipelineDdbStreamStack(app, `${appPrefix}PipelineDdbStreamStack`, {
-  env,
-  appPrefix,
-});
+if (!deployStack || deployStack === 'PipelineDdbStreamStack') {
+  new PipelineDdbStreamStack(app, `${appPrefix}PipelineDdbStreamStack`, {
+    env,
+    appPrefix,
+  });
+}

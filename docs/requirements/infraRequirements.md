@@ -1,9 +1,11 @@
 # Slack History MVP — AWS CDK Infrastructure Instructions (Shortened)
 
+**Date:** November 1, 2025
+
 **Scope:** Minimal CDK infra instructions for Slack History MVP.
 
 **Defaults & constraints:**
-- Language: TypeScript CDK v2.218.0+
+- Language: TypeScript CDK v2.221.1+, Node.js 22+
 - Application prefix: Mnemosyne
 - Environment: Single production environment (no staging/dev in MVP scope)
 - Region: eu-west-1
@@ -54,15 +56,38 @@ repo/
    - **Listener pipeline**: watches `message-listener/` folder, builds & deploys Lambda
    - **DDB stream pipeline**: watches `file-processor/`, builds & deploys Lambda, attaches stream event source
 
+## Cross-Stack Dependencies
+Pipeline stacks create their own dedicated CI roles and use static resource references to avoid cyclic dependencies. Each pipeline is self-contained and doesn't depend on other stacks.
+
+**Resource Naming Patterns:**
+- S3 Artifact Bucket: `{appPrefix}-artifacts-{accountId}-{region}` (lowercase)
+- Shared CI Role (BaseRolesStack): `{appPrefix}CiRole` (for future use)
+- Pipeline-specific CI Roles: `{appPrefix}{PipelineName}PipelineCiRole`
+- Slack Secrets: `{appPrefix}/slack/bot-token`, `{appPrefix}/slack/signing-secret`
+
+**Deployment Strategy:**
+- All stacks deploy simultaneously - no ordering dependencies
+- Each pipeline stack creates its own CI role with appropriate permissions
+- Artifact bucket is shared across all pipelines using static references
+
+**Resource Cleanup:**
+- S3 buckets use `autoDeleteObjects: true` to automatically empty before deletion
+- All resources use `removalPolicy: DESTROY` for MVP (change to RETAIN for production)
+- Resources are automatically cleaned up when removed from template or on stack failure
+
 ---
 
 ## Deployment order
-1. Deploy BaseRolesStack (artifact bucket & secrets placeholders)
-2. Authorize GitHub CodeStar connection
-3. Deploy PipelineInfraStack → deploys MainInfraStack
-4. Deploy PipelineListenerStack and PipelineDdbStreamStack
-5. Populate Slack secrets in Secrets Manager
-6. Configure Slack App to use Lambda Function URL
+1. **Simultaneous deployment**: All CDK stacks can be deployed together using `cdk deploy` (no cyclic dependencies)
+2. Authorize GitHub CodeStar connection (manual step after deployment)
+3. Populate Slack secrets in Secrets Manager (bot token and signing secret)
+4. Configure Slack App to use Lambda Function URL
+5. Pipelines will automatically trigger on code changes to respective folders
+
+**Post-deployment steps:**
+- Set up GitHub webhook for pipeline triggers
+- Configure Slack app with the Function URL endpoint
+- Add bot token and signing secret to Secrets Manager
 
 ---
 

@@ -1,0 +1,54 @@
+{
+  "_metadata": {
+    "major_version": 2,
+    "minor_version": 1
+  },
+  "display_information": {
+    "name": "Mnemosyne",
+    "description": "Slack History Archiver - Bypasses free plan message retention limits by archiving all messages, channels, and files to AWS.",
+    "background_color": "#4A154B",
+    "long_description": "Mnemosyne permanently archives your Slack workspace messages, channels, and files to AWS, ensuring no message history is lost due to Slack's free plan 90-day retention limit. All future messages are automatically captured and stored securely."
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Mnemosyne Archiver",
+      "always_online": true
+    },
+    "slash_commands": []
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "channels:history",
+        "channels:read",
+        "files:read",
+        "groups:history",
+        "groups:read",
+        "users:read"
+      ]
+    },
+    "redirect_urls": []
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://REPLACE_WITH_FUNCTION_URL.lambda-url.eu-west-1.on.aws/",
+      "bot_events": [
+        "message.channels",
+        "message.groups",
+        "channel_created",
+        "channel_deleted",
+        "channel_archive",
+        "channel_unarchive",
+        "channel_rename",
+        "channel_id_changed",
+        "file_shared"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": false
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": true
+  }
+}
