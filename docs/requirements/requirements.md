@@ -154,18 +154,16 @@ All handlers parse the incoming Slack event, filter out anything not related to 
 #### `channel_created`
 
 - Create channel item row: PK=`channel#{team_id}#{channel_id}`, SK=`evt#{event_ts}`. Set `name` and initial `names_history`.
-- Upsert ChannelIndex shard: add mapping channelId -> name (stream/secondary Lambda can handle aggregation if desired).
+
 
 #### `channel_rename` / `name` change
 
 - Append new name to `names_history` on the channel item (push front, cap 20).
 - Update channel item with updated `name` and `raw_event`.
-- Update ChannelIndex shard mapping.
 
 #### `channel_deleted`
 
 - Update channel item: `SET deleted = true` (attribute present).
-- Update ChannelIndex: remove mapping for channelId (or mark removed in shard; choose small mutation to shrink index size).
 
 #### `channel_archive`
 
@@ -179,7 +177,6 @@ All handlers parse the incoming Slack event, filter out anything not related to 
 #### `channel_id_changed`
 
 - Create a new channel item for the new channelId with `prev_channel_id` pointing to previous id. Preserve name and history fields as available.
-- Update ChannelIndex: insert new mapping and remove old mapping.
 
 #### `channel_purpose`
 
@@ -215,6 +212,18 @@ For each file attachment in the message:
 6. If file URL is external (no `url_private`) skip (store external link in `files` only).
 
 Idempotency: use file\_id in S3 key and conditional put to avoid duplicate uploads.
+
+##  channel_deleted event ( if deleted is set an the value us "true" )
+
+Update ChannelIndex: prefix name with deleted_
+
+## channel name changes
+
+Update ChannelIndex: update the name in the mapping
+
+## channel is created 
+
+Upsert ChannelIndex shard: add mapping channelId -> name
 
 Permissions: Lambda must have network egress and proper IAM rights for S3 and to read encrypted secrets (bot token). Bot token usage requires secrecy — rotate/secure.
 

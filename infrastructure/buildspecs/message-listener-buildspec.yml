@@ -1,0 +1,31 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo "Installing dependencies..."
+      - cd message-listener
+      - npm ci
+  build:
+    commands:
+      - echo "Building Lambda function..."
+      - cd message-listener
+      - npm run build  # TODO: Add build script to package.json
+      - echo "Creating deployment package..."
+      - mkdir -p ../dist
+      - cp -r dist/* ../dist/  # TODO: Adjust based on actual build output
+      - cp package*.json ../dist/
+      - cd ../dist
+      - npm ci --production  # Install only production dependencies
+  post_build:
+    commands:
+      - echo "Preparing artifact..."
+      - cd ../dist
+      - zip -r ../message-listener.zip ./*
+      # TODO: Add Lambda deployment commands here
+      # aws lambda update-function-code --function-name $FUNCTION_NAME --zip-file fileb://../message-listener.zip
+
+artifacts:
+  files:
+    - message-listener.zip
+  discard-paths: yes

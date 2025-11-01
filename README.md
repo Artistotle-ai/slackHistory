@@ -1,19 +1,36 @@
-# Slack History MVP
+# Mnemosyne - Slack History MVP
 
-An MVP application that stores all Slack messages, channels, and files to bypass Slack's free plan history limitations. Messages are stored in DynamoDB, files are saved to S3, and threads are efficiently indexed for retrieval.
+## Problem Statement
+
+Slack's free plan automatically deletes messages older than 90 days, creating gaps in organizational knowledge and making it difficult to reference past conversations, decisions, and shared files. This limitation forces teams to choose between upgrading to a paid plan or losing valuable communication history.
+
+## Solution & Outcome
+
+This MVP provides **unlimited, searchable message history** for Slack workspaces without requiring a paid subscription. Once deployed, all future messages, channel metadata, and file attachments are permanently preserved and accessible, enabling teams to:
+
+- **Retain organizational knowledge** indefinitely without message loss
+- **Reference past conversations** and decisions at any time
+- **Preserve file attachments** even after the original files expire
+- **Maintain complete channel history** including name changes, purpose, and topic updates
+- **Track threaded discussions** with efficient retrieval capabilities
 
 ## Scope & Limitations
 
-- **No backfill**: Only processes new events from deployment time forward
-- **No history reading**: Does not fetch existing messages from Slack
-- **MVP only**: Privacy and metadata handling are minimal
-- **New data only**: Real-time event ingestion only
+This MVP focuses on **real-time data capture** from the point of deployment forward:
 
-## Important Considerations
+- **Forward-looking only**: Historical messages prior to deployment are not captured
+- **New events only**: Captures messages and events as they occur in real-time
+- **MVP scope**: Designed for early-stage teams who prioritize functionality over enterprise-grade privacy controls
 
-⚠️ **Privacy & Legal Warning**: This application stores all messages, including private content, in cloud storage. Installing and running this is **not recommended** for any company without careful consideration. It's intended for early-stage startups and friends on free plans where all participants understand and agree to having this in the workspace.
+## Critical Considerations
 
-⚠️ **Terms of Service**: This may violate Slack's Terms and Conditions. Use at your own risk.
+⚠️ **Privacy & Compliance**: This application stores all workspace messages, including private channel content, in cloud storage. All workspace members must explicitly understand and consent to this data retention approach. **Not recommended for organizations with strict data privacy requirements.**
 
-For organizations needing similar functionality with proper privacy controls, consider Slack's Discovery/Enterprise export APIs instead.
+⚠️ **Terms of Service Risk**: This solution may violate Slack's Terms and Conditions. Use at your own risk.
+
+⚠️ **Enterprise Alternative**: Organizations requiring similar functionality with proper compliance controls should consider Slack's Discovery or Enterprise Grid export APIs instead.
+
+## Target Users
+
+Early-stage startups, small teams, and free plan workspaces where all participants understand the trade-offs and explicitly agree to comprehensive message archiving in exchange for unlimited history retention.
 
