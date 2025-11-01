@@ -30,7 +30,7 @@
   },
   "settings": {
     "event_subscriptions": {
-      "request_url": "https://REPLACE_WITH_FUNCTION_URL.lambda-url.eu-west-1.on.aws/",
+      "request_url": "https://f2hgrlxhaj2phs45ea6nnzyo4a0hriuo.lambda-url.eu-west-1.on.aws/",
       "bot_events": [
         "message.channels",
         "message.groups",
