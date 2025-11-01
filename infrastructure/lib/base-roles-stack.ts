@@ -36,7 +36,14 @@ export class BaseRolesStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      versioned: true,
+      versioned: false, // Disabled to reduce costs - artifacts don't need versioning
+      lifecycleRules: [
+        {
+          id: 'DeleteOldArtifacts',
+          enabled: true,
+          expiration: cdk.Duration.days(7), // Delete old artifacts after 7 days
+        },
+      ],
     });
 
     // Secrets Manager placeholders for Slack credentials

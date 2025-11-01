@@ -4,6 +4,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { BaseRolesStack } from './base-roles-stack';
 
 export interface MainInfraStackProps extends cdk.StackProps {
@@ -68,8 +69,19 @@ export class MainInfraStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      versioned: true,
-      // TODO: Define lifecycle rules for file retention (disabled for MVP)
+      versioned: false, // Disabled to reduce costs - archived files don't need versioning
+      lifecycleRules: [
+        {
+          id: 'TransitionToIA',
+          enabled: true,
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(90), // Files > 90 days old
+            },
+          ],
+        },
+      ],
     });
 
     // Lambda execution role with necessary permissions
@@ -100,6 +112,19 @@ export class MainInfraStack extends cdk.Stack {
       })
     );
 
+    // Explicit LogGroups for Lambda functions with 7-day retention
+    const messageListenerLogGroup = new logs.LogGroup(this, 'MessageListenerLogGroup', {
+      logGroupName: `/aws/lambda/${appPrefix}MessageListener`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const fileProcessorLogGroup = new logs.LogGroup(this, 'FileProcessorLogGroup', {
+      logGroupName: `/aws/lambda/${appPrefix}FileProcessor`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // Message listener Lambda function
     // Code is deployed ONLY via pipeline - using placeholder inline code for initial creation
     this.messageListenerFunction = new lambda.Function(this, 'MessageListenerFunction', {
@@ -114,8 +139,9 @@ export class MainInfraStack extends cdk.Stack {
       memorySize: 256,
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
-        SLACK_SIGNING_SECRET_ARN: `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:${appPrefix}/slack/signing-secret`,
-        SLACK_BOT_TOKEN_ARN: `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:${appPrefix}/slack/bot-token`,
+        // Import secret ARNs from BaseRolesStack exports (deployed first)
+        SLACK_SIGNING_SECRET_ARN: cdk.Fn.importValue(`${appPrefix}SlackSigningSecretArn`),
+        SLACK_BOT_TOKEN_ARN: cdk.Fn.importValue(`${appPrefix}SlackBotTokenSecretArn`),
         AWS_REGION: cdk.Aws.REGION,
       },
       description: 'Deployed via CodePipeline only - do not update manually',
