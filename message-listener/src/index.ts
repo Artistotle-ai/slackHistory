@@ -560,11 +560,15 @@ export const handler = async (
     }
 
     // Handle URL verification challenge (before signature verification)
-    if (parsedEvent.type === "url_verification") {
-      const strictEvent = parseEvent(parsedEvent);
-      if (strictEvent.type === "url_verification" && "challenge" in strictEvent && typeof strictEvent.challenge === "string") {
-        return handleUrlVerification(strictEvent as UrlVerificationEvent);
-      }
+    // According to https://docs.slack.dev/reference/events/url_verification/
+    // URL verification events come with type "url_verification" and challenge field
+    if (parsedEvent.type === "url_verification" && parsedEvent.challenge) {
+      console.log("Handling URL verification challenge");
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challenge: parsedEvent.challenge }),
+      };
     }
 
     // Verify Slack signature for all other events
