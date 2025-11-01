@@ -50,29 +50,23 @@ export class PipelineInfraStack extends cdk.Stack {
     // Note: During synthesis, this will resolve at deploy time
     const githubConnectionArn = cdk.Fn.importValue(`${appPrefix}GitHubConnectionArn`);
 
-    // Single CodeBuild project for CDK build and deploy
-    // Using v2 suffix to force CloudFormation update (workaround for buildspec change detection)
-    const cdkBuildDeployProject = new codebuild.PipelineProject(this, 'CdkBuildDeployProjectV2', {
-      projectName: `${appPrefix}CdkBuildDeployV2`,
-      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/infrastructure-buildspec.yml'),
-      environment: {
-        buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2_STANDARD_1_0,
-        computeType: codebuild.ComputeType.SMALL,
-      },
+    // Create IAM role for CodeBuild with all necessary permissions
+    const codeBuildRole = new iam.Role(this, 'CdkBuildDeployRole', {
+      assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
     });
 
-    // Grant CodeBuild permissions
-    artifactBucket.grantReadWrite(cdkBuildDeployProject);
+    // Grant S3 permissions
+    artifactBucket.grantReadWrite(codeBuildRole);
 
     // Add SSM permissions for CDK bootstrap version check
-    cdkBuildDeployProject.addToRolePolicy(new iam.PolicyStatement({
+    codeBuildRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['ssm:GetParameter'],
       resources: [`arn:aws:ssm:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:parameter/cdk-bootstrap/*`],
     }));
 
     // Add CloudFormation permissions for CDK deployments
-    cdkBuildDeployProject.addToRolePolicy(new iam.PolicyStatement({
+    codeBuildRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
         'cloudformation:*',
@@ -86,6 +80,33 @@ export class PipelineInfraStack extends cdk.Stack {
       ],
       resources: ['*'], // TODO: Restrict to specific resources for security
     }));
+
+    // Single CodeBuild project for CDK build and deploy
+    // Using CfnProject directly to specify Lambda compute with ARM image
+    // Lambda compute requires direct CloudFormation properties, not CDK high-level constructs
+    // Using V3 suffix to force replacement of old PipelineProject-based resource
+    const buildSpec = codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/infrastructure-buildspec.yml');
+    
+    const cdkBuildDeployProject = new codebuild.CfnProject(this, 'CdkBuildDeployProjectV3', {
+      name: `${appPrefix}CdkBuildDeployV3`,
+      artifacts: {
+        type: 'CODEPIPELINE',
+      },
+      environment: {
+        type: 'ARM_LAMBDA_CONTAINER',
+        computeType: 'BUILD_LAMBDA_1GB',
+        image: 'aws/codebuild/amazonlinux-aarch64-lambda-standard:nodejs22',
+        imagePullCredentialsType: 'CODEBUILD',
+      },
+      source: {
+        type: 'CODEPIPELINE',
+        buildSpec: buildSpec.toBuildSpec(),
+      },
+      serviceRole: codeBuildRole.roleArn,
+    });
+
+    // Create a Project wrapper for use in CodePipeline
+    const project = codebuild.Project.fromProjectName(this, 'CdkBuildDeployProject', cdkBuildDeployProject.ref);
 
     // CodePipeline for infrastructure deployment
     const pipeline = new codepipeline.Pipeline(this, 'InfraPipeline', {
@@ -115,7 +136,7 @@ export class PipelineInfraStack extends cdk.Stack {
     // Action name changed to force pipeline update with new CodeBuild project
     const buildDeployAction = new codepipeline_actions.CodeBuildAction({
       actionName: 'CDK_Build_Deploy_V2',
-      project: cdkBuildDeployProject,
+      project: project,
       input: sourceOutput,
     });
 
