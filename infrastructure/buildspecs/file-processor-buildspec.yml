@@ -12,23 +12,19 @@ phases:
     commands:
       - echo "Building Lambda function..."
       - cd file-processor
-      - npm run build  # TODO: Add build script to package.json
-      - echo "Creating deployment package..."
-      - mkdir -p ../dist
-      - cp -r dist/* ../dist/  # TODO: Adjust based on actual build output
-      - cp package*.json ../dist/
-      - cd ../dist
-      - npm ci --production  # Install only production dependencies
-  post_build:
-    commands:
-      - echo "Preparing artifact..."
-      - cd ../dist
-      - zip -r ../file-processor.zip ./*
-      # TODO: Add Lambda deployment commands here
-      # aws lambda update-function-code --function-name $FUNCTION_NAME --zip-file fileb://../file-processor.zip
-      # TODO: Add DynamoDB stream event source mapping if needed
-
-artifacts:
-  files:
-    - file-processor.zip
-  discard-paths: yes
+      - npm run build
+      - echo "Pruning dev dependencies..."
+      - npm prune --production
+      - echo "Creating zip with proper structure..."
+      - cd dist
+      - zip -r ../../file-processor-function.zip *
+      - cd ..
+      - zip -r ../file-processor-function.zip node_modules
+      - cd ..
+      - echo "Deploying Lambda function via pipeline..."
+      - |
+        if [ -z "$FUNCTION_NAME" ]; then
+          FUNCTION_NAME="MnemosyneFileProcessor"
+        fi
+        aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://file-processor-function.zip
+      - echo "Lambda deployment complete"
