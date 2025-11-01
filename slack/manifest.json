@@ -13,8 +13,7 @@
     "bot_user": {
       "display_name": "Mnemosyne Archiver",
       "always_online": true
-    },
-    "slash_commands": []
+    }
   },
   "oauth_config": {
     "scopes": {
@@ -49,6 +48,6 @@
     },
     "org_deploy_enabled": false,
     "socket_mode_enabled": false,
-    "token_rotation_enabled": true
+    "token_rotation_enabled": false
   }
 }

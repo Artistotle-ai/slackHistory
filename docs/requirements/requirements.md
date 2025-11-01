@@ -11,9 +11,9 @@
                 |
         Events API (HTTP POST)
                 |
-        API Gateway (HTTPS)
+        Lambda Function URL (HTTPS)
                 |
-            Lambda (Events Handler)
+        Lambda (Events Handler)
                 |
         DynamoDB (Single Table)
                 |
