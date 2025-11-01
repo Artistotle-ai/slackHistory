@@ -40,10 +40,6 @@
         "channel_unarchive",
         "channel_rename",
         "channel_id_changed",
-        "channel_purpose",
-        "channel_topic",
-        "channel_convert_to_private",
-        "channel_convert_to_public",
         "file_shared"
       ]
     },
