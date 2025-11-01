@@ -6,27 +6,61 @@ runtime-versions:
 phases:
   install:
     commands:
+      - echo "Current directory: $(pwd)"
+      - echo "Listing files:"
+      - ls -la
       - echo "Installing dependencies for slack-shared..."
-      - cd slack-shared
-      - npm ci
+      - |
+        if [ -d "slack-shared" ]; then
+          cd slack-shared
+          npm ci
+          cd ..
+        else
+          echo "WARNING: slack-shared directory not found, skipping..."
+        fi
       - echo "Installing dependencies for message-listener..."
-      - cd ../message-listener
-      - npm ci
+      - |
+        if [ -d "message-listener" ]; then
+          cd message-listener
+          npm ci
+          cd ..
+        else
+          echo "ERROR: message-listener directory not found!"
+          exit 1
+        fi
   build:
     commands:
       - echo "Building slack-shared dependency..."
-      - cd slack-shared
-      - npm run build
+      - |
+        if [ -d "slack-shared" ]; then
+          cd slack-shared
+          npm run build
+          cd ..
+        else
+          echo "WARNING: slack-shared directory not found, skipping build..."
+        fi
       - echo "Building message-listener Lambda function..."
-      - cd ../message-listener
-      - npm run build
-      - npm test || true
-      - echo "Installing production dependencies..."
-      - cd dist
-      - npm ci --production --ignore-scripts || true
+      - |
+        if [ -d "message-listener" ]; then
+          cd message-listener
+          npm run build
+          npm test || true
+          cd ..
+        else
+          echo "ERROR: message-listener directory not found!"
+          exit 1
+        fi
       - echo "Creating deployment package..."
-      - cd ../..
-      - zip -r message-listener-function.zip message-listener/dist message-listener/node_modules message-listener/package.json 2>/dev/null || (cd message-listener && zip -r ../message-listener-function.zip dist/* node_modules package.json)
+      - cd message-listener
+      - echo "Installing production dependencies in dist..."
+      - |
+        if [ -d "dist" ]; then
+          cd dist
+          npm ci --production --ignore-scripts || true
+          cd ..
+        fi
+      - zip -r ../message-listener-function.zip dist/* node_modules package.json 2>/dev/null || zip -r ../message-listener-function.zip dist/* node_modules package.json
+      - cd ..
       - echo "Deploying Lambda function via pipeline..."
       - |
         if [ -z "$FUNCTION_NAME" ]; then
