@@ -11,6 +11,16 @@ export interface PipelineInfraStackProps extends cdk.StackProps {
   appPrefix: string;
 }
 
+/**
+ * PipelineInfraStack - CI/CD for infrastructure deployments
+ * 
+ * Automated pipeline for CDK infrastructure changes:
+ * - Triggers on changes to infrastructure/ folder in main branch
+ * - Uses CodeStar connection for GitHub integration
+ * - Single CodeBuild step: npm ci, build, synth, deploy
+ * - Deploys all CDK stacks automatically (no manual approval)
+ * - Pipeline Type V2 for enhanced features and performance
+ */
 export class PipelineInfraStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PipelineInfraStackProps) {
     super(scope, id, props);

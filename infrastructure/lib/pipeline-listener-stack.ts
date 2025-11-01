@@ -12,6 +12,16 @@ export interface PipelineListenerStackProps extends cdk.StackProps {
   appPrefix: string;
 }
 
+/**
+ * PipelineListenerStack - CI/CD for message-listener Lambda
+ * 
+ * Automated deployment pipeline for Slack message listener:
+ * - Triggers on changes to message-listener/ folder in main branch
+ * - Uses CodeStar connection for GitHub integration
+ * - Single CodeBuild step: npm ci, build, test, deploy Lambda
+ * - Updates Lambda function code directly via AWS CLI
+ * - No manual approval required for continuous deployment
+ */
 export class PipelineListenerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PipelineListenerStackProps) {
     super(scope, id, props);

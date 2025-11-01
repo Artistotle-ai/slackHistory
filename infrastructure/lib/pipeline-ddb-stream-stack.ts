@@ -13,6 +13,16 @@ export interface PipelineDdbStreamStackProps extends cdk.StackProps {
   appPrefix: string;
 }
 
+/**
+ * PipelineDdbStreamStack - CI/CD for file-processor Lambda
+ * 
+ * Automated deployment pipeline for DynamoDB stream file processor:
+ * - Triggers on changes to file-processor/ folder in main branch
+ * - Uses CodeStar connection for GitHub integration
+ * - Single CodeBuild step: npm ci, build, test, deploy Lambda
+ * - Updates Lambda function code directly via AWS CLI
+ * - Processes DynamoDB streams to download and store Slack files in S3
+ */
 export class PipelineDdbStreamStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PipelineDdbStreamStackProps) {
     super(scope, id, props);

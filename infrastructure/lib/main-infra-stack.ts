@@ -10,6 +10,17 @@ export interface MainInfraStackProps extends cdk.StackProps {
   appPrefix: string;
 }
 
+/**
+ * MainInfraStack - Core application infrastructure
+ * 
+ * Deploys the primary Slack archiving resources:
+ * - DynamoDB single-table for messages, channels, and metadata
+ * - Global Secondary Index for efficient thread retrieval
+ * - S3 bucket for Slack file storage
+ * - Lambda function (message-listener) with Function URL for Slack Events API
+ * - Lambda function (file-processor) for DynamoDB stream processing
+ * - IAM roles and permissions for Lambda execution
+ */
 export class MainInfraStack extends cdk.Stack {
   public readonly slackArchiveTable: dynamodb.Table;
   public readonly slackFilesBucket: s3.Bucket;

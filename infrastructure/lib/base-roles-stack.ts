@@ -9,6 +9,15 @@ export interface BaseRolesStackProps extends cdk.StackProps {
   appPrefix: string;
 }
 
+/**
+ * BaseRolesStack - Shared infrastructure resources
+ * 
+ * Creates foundational resources used by all pipelines and application stacks:
+ * - S3 artifact bucket for CodePipeline
+ * - Secrets Manager placeholders for Slack credentials
+ * - CodeStar connection for GitHub integration
+ * - Shared IAM roles for CI/CD operations
+ */
 export class BaseRolesStack extends cdk.Stack {
   public readonly artifactBucket: s3.Bucket;
   public readonly slackBotTokenSecret: secretsmanager.Secret;
