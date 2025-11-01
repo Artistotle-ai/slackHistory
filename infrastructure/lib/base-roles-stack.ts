@@ -98,9 +98,11 @@ export class BaseRolesStack extends cdk.Stack {
       description: 'IAM role ARN for CI/CD operations',
     });
 
+    // Export connection ARN for use in pipeline stacks
     new cdk.CfnOutput(this, 'GitHubConnectionArn', {
       value: this.githubConnection.attrConnectionArn,
       description: 'CodeStar GitHub connection ARN (requires manual authorization in AWS Console)',
+      exportName: `${appPrefix}GitHubConnectionArn`,
     });
   }
 }

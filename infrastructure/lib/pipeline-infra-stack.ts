@@ -30,8 +30,8 @@ export class PipelineInfraStack extends cdk.Stack {
   }
 
   private createPipeline(appPrefix: string, artifactBucket: s3.IBucket) {
-    // Reference GitHub connection created in BaseRolesStack
-    const githubConnectionArn = `arn:aws:codeconnections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/*`;
+    // Import GitHub connection ARN from BaseRolesStack export
+    const githubConnectionArn = cdk.Fn.importValue(`${appPrefix}GitHubConnectionArn`);
 
     // Single CodeBuild project for CDK build and deploy
     const cdkBuildDeployProject = new codebuild.PipelineProject(this, 'CdkBuildDeployProject', {
