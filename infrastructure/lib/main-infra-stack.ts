@@ -45,9 +45,7 @@ export class MainInfraStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // TODO: Change to RETAIN for production
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: true,
-      },
+      //  point-in-time recovery is disabled to avoid costs, it is not needed for this project)
     });
 
     // GSI for thread retrieval (sparse index)
@@ -134,11 +132,14 @@ export class MainInfraStack extends cdk.Stack {
     });
 
     // File processor Lambda function (triggered by DynamoDB stream)
+    // TODO: File processor is not yet implemented - using placeholder inline code for initial creation
+    // Actual code will be deployed via pipeline when file-processor is implemented
     this.fileProcessorFunction = new lambda.Function(this, 'FileProcessorFunction', {
       functionName: `${appPrefix}FileProcessor`,
       runtime: lambda.Runtime.NODEJS_22_X,
       architecture: lambda.Architecture.ARM_64,
-      code: lambda.Code.fromAsset('../file-processor/dist'), // Built TypeScript output
+      // Placeholder code - actual code deployed via pipeline only
+      code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 503, body: "Lambda not deployed via pipeline" });'),
       handler: 'index.handler',
       role: lambdaExecutionRole,
       timeout: cdk.Duration.minutes(5), // Longer timeout for file processing
@@ -148,6 +149,7 @@ export class MainInfraStack extends cdk.Stack {
         SLACK_FILES_BUCKET: this.slackFilesBucket.bucketName,
         // TODO: Add environment variables for secrets ARNs
       },
+      description: 'Deployed via CodePipeline only - do not update manually',
     });
 
     // TODO: Add DynamoDB stream event source mapping for file processor

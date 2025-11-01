@@ -44,10 +44,10 @@ export class PipelineListenerStack extends cdk.Stack {
     const githubConnectionArn = cdk.Fn.importValue(`${appPrefix}GitHubConnectionArn`);
 
     // Single CodeBuild project for Lambda build and deploy
-    // Uses buildspec YAML file from buildspecs/ folder
+    // Uses buildspec YAML file from infrastructure/buildspecs/ folder (relative to repo root)
     const lambdaBuildDeployProject = new codebuild.PipelineProject(this, 'LambdaBuildDeployProject', {
       projectName: `${appPrefix}MessageListenerBuildDeploy`,
-      buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspecs/message-listener-buildspec.yml'),
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/message-listener-buildspec.yml'),
       environment: {
         buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_ARM_3,
         environmentVariables: {

@@ -236,9 +236,14 @@ async function handleChannelRename(
   if (!currentChannel) {
     await putItem(config.tableName, { itemId, timestamp: event.event_ts || String(Date.now() / 1000), type: "channel", team_id: teamId, channel_id: channelId, name: newName, names_history: [newName], visibility: "public", raw_event: event as unknown as SlackEvent });
   } else {
+    // Build names_history: start with existing history or current name, add new name if different
+    const existingHistory = currentChannel.names_history || [currentChannel.name || channelId];
+    const namesToAdd = existingHistory[existingHistory.length - 1] !== newName ? [newName] : [];
+    const namesHistory = capArray([...existingHistory, ...namesToAdd], 20);
+    
     await updateChannelItem(teamId, channelId, "SET name = :name, names_history = :names_history, raw_event = :raw_event", {
       ":name": newName,
-      ":names_history": capArray([...(currentChannel.names_history || [currentChannel.name || channelId]), newName], 20),
+      ":names_history": namesHistory,
       ":raw_event": event as unknown as SlackEvent,
     }, event.event_ts);
   }
@@ -596,15 +601,12 @@ export const handler = async (
       body: JSON.stringify({ ok: true }),
     };
   } catch (error) {
+    // Return 200 to prevent Slack retries (requirements: log errors but avoid duplicates)
     console.error("Error processing event:", error);
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        error: "Internal Server Error",
-        message:
-          error instanceof Error ? error.message : String(error),
-      }),
+      body: JSON.stringify({ ok: false }),
     };
   }
 };
