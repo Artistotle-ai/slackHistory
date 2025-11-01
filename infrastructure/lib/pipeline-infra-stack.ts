@@ -56,7 +56,8 @@ export class PipelineInfraStack extends cdk.Stack {
       projectName: `${appPrefix}CdkBuildDeployV2`,
       buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/infrastructure-buildspec.yml'),
       environment: {
-        buildImage: codebuild.LinuxArmBuildImage.fromDockerRegistry('aws/codebuild/amazonlinux-aarch64-lambda-standard:nodejs22'),
+        buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2_STANDARD_1_0,
+        computeType: codebuild.ComputeType.SMALL,
       },
     });
 
