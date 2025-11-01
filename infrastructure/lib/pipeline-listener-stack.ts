@@ -102,6 +102,15 @@ export class PipelineListenerStack extends cdk.Stack {
       branch: 'main',
       connectionArn: githubConnectionArn, // Uses connection created in BaseRolesStack
       output: sourceOutput,
+      triggerOnPush: true,
+      filterGroups: [
+        codepipeline_actions.FilterGroup.create('MessageListenerFilter', {
+          filters: [
+            codepipeline_actions.Filter.pattern('message-listener/**/*'),
+            codepipeline_actions.Filter.pattern('slack-shared/**/*'),
+          ],
+        }),
+      ],
     });
 
     pipeline.addStage({

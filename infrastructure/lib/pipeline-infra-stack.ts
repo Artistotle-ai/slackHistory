@@ -91,6 +91,16 @@ export class PipelineInfraStack extends cdk.Stack {
       branch: 'main',
       connectionArn: githubConnectionArn, // Uses connection created in BaseRolesStack
       output: sourceOutput,
+      triggerOnPush: true,
+      filterGroups: [
+        codepipeline_actions.FilterGroup.create('InfraFilter', {
+          filters: [
+            codepipeline_actions.Filter.pattern('infrastructure/**/*'),
+            codepipeline_actions.Filter.pattern('slack/**/*'),
+            codepipeline_actions.Filter.pattern('docs/**/*'),
+          ],
+        }),
+      ],
     });
 
     pipeline.addStage({

@@ -52,9 +52,9 @@ repo/
    - Lambda permissions: DDB access, S3 write, Secrets Manager read
 
 3. **Pipeline stacks**
-   - **Infra pipeline**: watches `infrastructure/` folder, combined CDK build & deploy (no approval steps)
-   - **Listener pipeline**: watches `message-listener/` folder, combined Lambda build & deploy
-   - **DDB stream pipeline**: watches `file-processor/`, combined Lambda build & deploy
+   - **Infra pipeline**: watches `infrastructure/`, `slack/`, `docs/` folders, combined CDK build & deploy (no approval steps)
+   - **Listener pipeline**: watches `message-listener/`, `slack-shared/` folders, combined Lambda build & deploy
+   - **DDB stream pipeline**: watches `file-processor/`, `slack-shared/` folders, combined Lambda build & deploy
 
 ## Cross-Stack Dependencies
 Pipeline stacks create their own dedicated CI roles and use static resource references to avoid cyclic dependencies. Each pipeline is self-contained and doesn't depend on other stacks.

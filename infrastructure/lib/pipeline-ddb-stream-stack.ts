@@ -103,6 +103,15 @@ export class PipelineDdbStreamStack extends cdk.Stack {
       branch: 'main',
       connectionArn: githubConnectionArn, // Uses connection created in BaseRolesStack
       output: sourceOutput,
+      triggerOnPush: true,
+      filterGroups: [
+        codepipeline_actions.FilterGroup.create('FileProcessorFilter', {
+          filters: [
+            codepipeline_actions.Filter.pattern('file-processor/**/*'),
+            codepipeline_actions.Filter.pattern('slack-shared/**/*'),
+          ],
+        }),
+      ],
     });
 
     pipeline.addStage({
