@@ -55,26 +55,17 @@ aws secretsmanager put-secret-value \
 - Recreate app from manifest, or manually configure Event Subscriptions
 - Subscribe to: `message.channels`, `message.groups`, `channel_*`, `file_shared`
 
-**4. Configure GitHub CodeStar Connection (required for CI/CD):**
+**4. Authorize GitHub CodeStar Connection (required for CI/CD):**
 
-Before pipelines can work, create a CodeStar connection:
+The CodeStar connection is created automatically during deployment. You just need to authorize it:
 
-```bash
-# Get the connection ARN from AWS Console
-# AWS Console → Developer Tools → Connections → Create connection
-# - Provider: GitHub
-# - Connection name: mnemosyne-github
-# - Authorize with GitHub
-```
+1. Go to AWS Console → Developer Tools → Connections
+2. Find the connection named `Mnemosyne-github` (status: PENDING)
+3. Click **Update pending connection** → **Install a new app**
+4. Authorize with GitHub and select your repository
+5. Connection status will change to AVAILABLE
 
-After creating the connection:
-1. Copy the connection ARN (format: `arn:aws:codestar-connections:eu-west-1:ACCOUNT_ID:connection/CONNECTION_ID`)
-2. Update all three pipeline stack files:
-   - `infrastructure/lib/pipeline-infra-stack.ts`
-   - `infrastructure/lib/pipeline-listener-stack.ts`
-   - `infrastructure/lib/pipeline-ddb-stream-stack.ts`
-3. Replace `REPLACE_WITH_CONNECTION_ID` with your actual connection ID
-4. Redeploy: `npx cdk deploy --all`
+Note: The connection ARN is automatically output after deployment and used by all pipelines.
 
 ## Verify
 

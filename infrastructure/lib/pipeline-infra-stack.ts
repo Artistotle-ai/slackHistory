@@ -20,6 +20,7 @@ export class PipelineInfraStack extends cdk.Stack {
     // Use static references to avoid cyclic dependencies
     // Resources are referenced by predictable naming patterns
     const artifactBucketName = `${appPrefix.toLowerCase()}-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`;
+    const githubConnectionArn = `arn:aws:codeconnections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/*`;
 
     // Create references using static names
     const artifactBucket = s3.Bucket.fromBucketName(this, 'ArtifactBucket', artifactBucketName);
@@ -42,6 +43,7 @@ export class PipelineInfraStack extends cdk.Stack {
         'dynamodb:*',
         'secretsmanager:*',
         'kms:*',
+        'codeconnections:UseConnection',
       ],
       resources: ['*'], // TODO: Restrict to specific resources for security
     }));
@@ -51,6 +53,9 @@ export class PipelineInfraStack extends cdk.Stack {
   }
 
   private createPipeline(appPrefix: string, artifactBucket: s3.IBucket, ciRole: iam.IRole) {
+    // Reference GitHub connection created in BaseRolesStack
+    const githubConnectionArn = `arn:aws:codeconnections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/*`;
+
     // CodeBuild project for CDK synth
     const cdkSynthProject = new codebuild.PipelineProject(this, 'CdkSynthProject', {
       projectName: `${appPrefix}CdkSynth`,
@@ -127,7 +132,7 @@ export class PipelineInfraStack extends cdk.Stack {
       owner: 'Artistotle-ai',
       repo: 'slackHistory',
       branch: 'main',
-      connectionArn: `arn:aws:codestar-connections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/REPLACE_WITH_CONNECTION_ID`, // TODO: Replace with actual CodeStar connection ARN
+      connectionArn: githubConnectionArn, // Uses connection created in BaseRolesStack
       output: sourceOutput,
     });
 

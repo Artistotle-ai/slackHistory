@@ -40,6 +40,7 @@ export class PipelineListenerStack extends cdk.Stack {
         'iam:*',
         's3:*',
         'cloudformation:*',
+        'codeconnections:UseConnection',
       ],
       resources: ['*'], // TODO: Restrict to specific resources for security
     }));
@@ -49,6 +50,9 @@ export class PipelineListenerStack extends cdk.Stack {
   }
 
   private createPipeline(appPrefix: string, artifactBucket: s3.IBucket, ciRole: iam.IRole) {
+    // Reference GitHub connection created in BaseRolesStack
+    const githubConnectionArn = `arn:aws:codeconnections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/*`;
+
     // CodeBuild project for Lambda build
     const lambdaBuildProject = new codebuild.PipelineProject(this, 'LambdaBuildProject', {
       projectName: `${appPrefix}MessageListenerBuild`,
@@ -83,7 +87,7 @@ export class PipelineListenerStack extends cdk.Stack {
       owner: 'Artistotle-ai',
       repo: 'slackHistory',
       branch: 'main',
-      connectionArn: `arn:aws:codestar-connections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/REPLACE_WITH_CONNECTION_ID`, // TODO: Replace with actual CodeStar connection ARN
+      connectionArn: githubConnectionArn, // Uses connection created in BaseRolesStack
       output: sourceOutput,
     });
 

@@ -3,6 +3,7 @@ import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as codeconnections from 'aws-cdk-lib/aws-codeconnections';
 
 export interface BaseRolesStackProps extends cdk.StackProps {
   appPrefix: string;
@@ -13,6 +14,7 @@ export class BaseRolesStack extends cdk.Stack {
   public readonly slackBotTokenSecret: secretsmanager.Secret;
   public readonly slackSigningSecretSecret: secretsmanager.Secret;
   public readonly ciRole: iam.Role;
+  public readonly githubConnection: codeconnections.CfnConnection;
 
   constructor(scope: Construct, id: string, props: BaseRolesStackProps) {
     super(scope, id, props);
@@ -69,6 +71,12 @@ export class BaseRolesStack extends cdk.Stack {
       resources: ['*'], // TODO: Restrict to specific resources for security
     }));
 
+    // GitHub CodeStar Connection
+    this.githubConnection = new codeconnections.CfnConnection(this, 'GitHubConnection', {
+      connectionName: `${appPrefix}-github`,
+      providerType: 'GitHub',
+    });
+
     // Output important resources
     new cdk.CfnOutput(this, 'ArtifactBucketName', {
       value: this.artifactBucket.bucketName,
@@ -88,6 +96,11 @@ export class BaseRolesStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'CiRoleArn', {
       value: this.ciRole.roleArn,
       description: 'IAM role ARN for CI/CD operations',
+    });
+
+    new cdk.CfnOutput(this, 'GitHubConnectionArn', {
+      value: this.githubConnection.attrConnectionArn,
+      description: 'CodeStar GitHub connection ARN (requires manual authorization in AWS Console)',
     });
   }
 }
