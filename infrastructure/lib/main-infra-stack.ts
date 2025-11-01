@@ -142,7 +142,7 @@ export class MainInfraStack extends cdk.Stack {
         // Import secret ARNs from BaseRolesStack exports (deployed first)
         SLACK_SIGNING_SECRET_ARN: cdk.Fn.importValue(`${appPrefix}SlackSigningSecretArn`),
         SLACK_BOT_TOKEN_ARN: cdk.Fn.importValue(`${appPrefix}SlackBotTokenSecretArn`),
-        AWS_REGION: cdk.Aws.REGION,
+        // AWS_REGION is automatically provided by Lambda runtime - do not set manually
       },
       description: 'Deployed via CodePipeline only - do not update manually',
     });
@@ -174,7 +174,7 @@ export class MainInfraStack extends cdk.Stack {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
         SLACK_FILES_BUCKET: this.slackFilesBucket.bucketName,
         SLACK_BOT_TOKEN_ARN: cdk.Fn.importValue(`${appPrefix}SlackBotTokenSecretArn`),
-        AWS_REGION: cdk.Aws.REGION,
+        // AWS_REGION is automatically provided by Lambda runtime - do not set manually
       },
       description: 'Deployed via CodePipeline only - do not update manually',
     });
