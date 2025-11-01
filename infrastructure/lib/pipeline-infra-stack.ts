@@ -33,52 +33,24 @@ export class PipelineInfraStack extends cdk.Stack {
     // Reference GitHub connection created in BaseRolesStack
     const githubConnectionArn = `arn:aws:codeconnections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/*`;
 
-    // CodeBuild project for CDK synth
-    const cdkSynthProject = new codebuild.PipelineProject(this, 'CdkSynthProject', {
-      projectName: `${appPrefix}CdkSynth`,
+    // Single CodeBuild project for CDK build and deploy
+    const cdkBuildDeployProject = new codebuild.PipelineProject(this, 'CdkBuildDeployProject', {
+      projectName: `${appPrefix}CdkBuildDeploy`,
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
         phases: {
           install: {
+            commands: [
+              'npm install -g aws-cdk@2.221.1',
+            ],
+          },
+          build: {
             commands: [
               'cd infrastructure',
               'npm ci',
-            ],
-          },
-          build: {
-            commands: [
-              'cd infrastructure',
               'npm run build',
-              'npx cdk synth',
-            ],
-          },
-        },
-        artifacts: {
-          'base-directory': 'infrastructure/cdk.out',
-          files: '**/*',
-        },
-      }),
-      environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-      },
-    });
-
-    // CodeBuild project for CDK deploy
-    const cdkDeployProject = new codebuild.PipelineProject(this, 'CdkDeployProject', {
-      projectName: `${appPrefix}CdkDeploy`,
-      buildSpec: codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          install: {
-            commands: [
-              'npm install -g aws-cdk', // TODO: Pin CDK version
-            ],
-          },
-          build: {
-            commands: [
-              'cd infrastructure',
-              'npx cdk deploy --require-approval never --outputs-file outputs.json',
-              // TODO: Define specific stack deployment commands
+              'npx cdk synth --quiet',
+              'npx cdk deploy --all --require-approval never --outputs-file outputs.json',
             ],
           },
         },
@@ -89,8 +61,7 @@ export class PipelineInfraStack extends cdk.Stack {
     });
 
     // Grant CodeBuild permissions
-    artifactBucket.grantReadWrite(cdkSynthProject);
-    artifactBucket.grantReadWrite(cdkDeployProject);
+    artifactBucket.grantReadWrite(cdkBuildDeployProject);
 
     // TODO: Add CloudFormation and CDK permissions to CodeBuild roles
 
@@ -117,30 +88,16 @@ export class PipelineInfraStack extends cdk.Stack {
       actions: [sourceAction],
     });
 
-    // Synth stage
-    const synthOutput = new codepipeline.Artifact('SynthOutput');
-    const synthAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'CDK_Synth',
-      project: cdkSynthProject,
+    // Build and Deploy stage (combined)
+    const buildDeployAction = new codepipeline_actions.CodeBuildAction({
+      actionName: 'CDK_Build_Deploy',
+      project: cdkBuildDeployProject,
       input: sourceOutput,
-      outputs: [synthOutput],
     });
 
     pipeline.addStage({
-      stageName: 'Synth',
-      actions: [synthAction],
-    });
-
-    // Deploy stage
-    const deployAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'CDK_Deploy',
-      project: cdkDeployProject,
-      input: synthOutput,
-    });
-
-    pipeline.addStage({
-      stageName: 'Deploy',
-      actions: [deployAction],
+      stageName: 'Build_Deploy',
+      actions: [buildDeployAction],
     });
 
     // Output pipeline information

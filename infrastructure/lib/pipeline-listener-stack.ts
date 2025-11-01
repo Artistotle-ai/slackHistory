@@ -33,10 +33,29 @@ export class PipelineListenerStack extends cdk.Stack {
     // Reference GitHub connection created in BaseRolesStack
     const githubConnectionArn = `arn:aws:codeconnections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/*`;
 
-    // CodeBuild project for Lambda build
-    const lambdaBuildProject = new codebuild.PipelineProject(this, 'LambdaBuildProject', {
-      projectName: `${appPrefix}MessageListenerBuild`,
-      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/message-listener-buildspec.yml'), // TODO: Create buildspec file
+    // Single CodeBuild project for Lambda build and deploy
+    const lambdaBuildDeployProject = new codebuild.PipelineProject(this, 'LambdaBuildDeployProject', {
+      projectName: `${appPrefix}MessageListenerBuildDeploy`,
+      buildSpec: codebuild.BuildSpec.fromObject({
+        version: '0.2',
+        phases: {
+          install: {
+            commands: [
+              'cd message-listener',
+              'npm ci',
+            ],
+          },
+          build: {
+            commands: [
+              'cd message-listener',
+              'npm run build',
+              'npm run test', // TODO: Add tests
+              'cd ..',
+              'aws lambda update-function-code --function-name MnemosyneMessageListener --zip-file fileb://message-listener/dist/lambda.zip',
+            ],
+          },
+        },
+      }),
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
         environmentVariables: {
@@ -48,9 +67,14 @@ export class PipelineListenerStack extends cdk.Stack {
     });
 
     // Grant permissions
-    artifactBucket.grantReadWrite(lambdaBuildProject);
+    artifactBucket.grantReadWrite(lambdaBuildDeployProject);
 
-    // TODO: Add Lambda update permissions to CodeBuild role
+    // Add Lambda update permissions to CodeBuild role
+    lambdaBuildDeployProject.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['lambda:UpdateFunctionCode'],
+      resources: [`arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:MnemosyneMessageListener`],
+    }));
 
     // CodePipeline for message-listener deployment
     const pipeline = new codepipeline.Pipeline(this, 'ListenerPipeline', {
@@ -75,41 +99,16 @@ export class PipelineListenerStack extends cdk.Stack {
       actions: [sourceAction],
     });
 
-    // Build stage
-    const buildOutput = new codepipeline.Artifact('BuildOutput');
-    const buildAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'Lambda_Build',
-      project: lambdaBuildProject,
+    // Build and Deploy stage (combined)
+    const buildDeployAction = new codepipeline_actions.CodeBuildAction({
+      actionName: 'Lambda_Build_Deploy',
+      project: lambdaBuildDeployProject,
       input: sourceOutput,
-      outputs: [buildOutput],
     });
 
     pipeline.addStage({
-      stageName: 'Build',
-      actions: [buildAction],
-    });
-
-    // TODO: Deploy stage - Lambda deployment
-    // Note: LambdaDeployAction may not be available in CDK v2.221.1
-    // Consider using CloudFormation or manual Lambda update in buildspec
-    // const deployAction = new codepipeline_actions.LambdaDeployAction({
-    //   actionName: 'Lambda_Deploy',
-    //   lambda: lambda.Function.fromFunctionName(
-    //     this,
-    //     'MessageListenerFunction',
-    //     `${appPrefix}MessageListener` // TODO: Reference actual Lambda function
-    //   ),
-    //   input: buildOutput,
-    // });
-
-    // Temporary placeholder - remove this stage for now
-    const deployAction = new codepipeline_actions.ManualApprovalAction({
-      actionName: 'Manual_Approval',
-    });
-
-    pipeline.addStage({
-      stageName: 'Deploy',
-      actions: [deployAction],
+      stageName: 'Build_Deploy',
+      actions: [buildDeployAction],
     });
 
     // Output pipeline information
