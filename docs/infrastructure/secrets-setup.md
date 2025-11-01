@@ -1,63 +1,79 @@
 # Slack Secrets Setup
 
-Configure Slack credentials for Mnemosyne.
+Configure Slack credentials for Mnemosyne using the app manifest.
 
 ## Required Secrets
 
-- **Bot Token** (`xoxb-...`) - API authentication
-- **Signing Secret** - Webhook verification
+- **Bot Token** (`xoxb-...`) - API authentication for posting messages, reading events
+- **Signing Secret** - Webhook verification for request validation
 
-## Create Slack App
+## Create Slack App from Manifest
 
-**Option 1: Using Manifest (Recommended)**
-1. [Slack API Dashboard](https://api.slack.com/apps) → **Create New App** → **From an app manifest**
-2. Select workspace, paste contents of `slack/manifest.json`
-3. Click **Create**
+1. Go to [Slack API Dashboard](https://api.slack.com/apps)
+2. Click **Create New App** → **From an app manifest**
+3. Select your workspace
+4. Paste the entire contents of `slack/manifest.json`
+5. Click **Create**
 
-**Option 2: Manual Setup**
-1. [Slack API Dashboard](https://api.slack.com/apps) → **Create New App** → **From scratch**
-2. Name: `Mnemosyne`, select workspace, create
+The manifest includes all required permissions and event subscriptions.
 
-## Configure Scopes
+## Get Bot Token
 
-**OAuth & Permissions** → **Bot Token Scopes**:
-- `channels:history` - Public channel messages
-- `channels:read` - Channel info
-- `files:read` - File access
-- `groups:history` - Private channel messages
-- `groups:read` - Private channel info  
-- `users:read` - User info
+**Bot tokens** (xoxb-...) authenticate API calls to Slack.
 
-## Install App
+### How to Get Your Bot Token:
 
-1. **Install to Workspace** → Allow
-2. Copy **Bot User OAuth Token** (starts with `xoxb-`)
-3. **Basic Information** → **App Credentials** → Copy **Signing Secret**
+1. Open your Slack app (Mnemosyne) in the [API Dashboard](https://api.slack.com/apps)
+2. Navigate to **OAuth & Permissions** in the left sidebar
+3. Scroll down to **Bot Token Scopes** - verify these scopes are present:
+   - `channels:history`, `channels:read`
+   - `files:read`, `groups:history`, `groups:read`
+   - `users:read`
+4. Click **Install to Workspace** (or **Reinstall to Workspace** if already installed)
+5. Grant permissions when prompted
+6. After installation, you'll see **Bot User OAuth Token** - this is your `xoxb-...` token
+7. Copy the token (keep it secure)
 
-## Store in AWS
+## Get Signing Secret
+
+1. In your app settings, go to **Basic Information**
+2. Scroll to **App Credentials**
+3. Copy the **Signing Secret** (used to verify webhook requests from Slack)
+
+## Store Secrets in AWS
+
+After getting both tokens, store them in AWS Secrets Manager:
 
 ```bash
-# Bot token
+# Store bot token
 aws secretsmanager put-secret-value \
   --secret-id Mnemosyne/slack/bot-token \
-  --secret-string "xoxb-your-token"
+  --secret-string "xoxb-your-actual-token-here"
 
-# Signing secret
+# Store signing secret
 aws secretsmanager put-secret-value \
   --secret-id Mnemosyne/slack/signing-secret \
-  --secret-string "your-secret"
+  --secret-string "your-actual-signing-secret-here"
 ```
 
-## Configure Events
+## Update Manifest with Function URL
 
-**Event Subscriptions** → Enable → Set Request URL (from deployment outputs)
+After AWS deployment, update the manifest:
 
-**Subscribe to:**
-- `message.channels`, `message.groups`
-- `channel_created`, `channel_deleted`, `channel_archive`, `channel_unarchive`, `channel_rename`, `channel_id_changed`
-- `file_shared`
+1. Get your Function URL from CloudFormation outputs
+2. Edit `slack/manifest.json`
+3. Replace `REPLACE_WITH_FUNCTION_URL` with your actual Lambda Function URL
+4. Recreate the Slack app with the updated manifest if needed
 
-Save changes.
+## Verify Setup
+
+Test that your app is working:
+
+```bash
+# Check secrets exist
+aws secretsmanager describe-secret --secret-id Mnemosyne/slack/bot-token
+aws secretsmanager describe-secret --secret-id Mnemosyne/slack/signing-secret
+```
 
 ## Security
 
