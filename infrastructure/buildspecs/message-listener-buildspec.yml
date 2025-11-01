@@ -6,9 +6,6 @@ runtime-versions:
 phases:
   install:
     commands:
-      - echo "Current directory: $(pwd)"
-      - echo "Listing files:"
-      - ls -la
       - echo "Installing dependencies for slack-shared..."
       - |
         if [ -d "slack-shared" ]; then
@@ -67,4 +64,4 @@ phases:
           FUNCTION_NAME="MnemosyneMessageListener"
         fi
         aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://message-listener-function.zip
-      - echo "Lambda deployment complete - function deployed via pipeline only"
+      - echo "Lambda deployment complete"
