@@ -48,7 +48,6 @@ if (!deployStack || deployStack === 'PipelineInfraStack') {
   });
 }
 
-
 if (!deployStack || deployStack === 'PipelineListenerStack') {
   new PipelineListenerStack(app, `${appPrefix}PipelineListenerStack`, {
     env,
