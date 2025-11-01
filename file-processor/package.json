@@ -4,9 +4,9 @@
   "description": "Slack file processor Lambda function for Mnemosyne",
   "main": "dist/index.js",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --external:aws-sdk --minify --sourcemap=false",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --external:aws-sdk --minify",
     "build:dev": "tsc",
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "watch": "tsc -w"
   },
   "dependencies": {
