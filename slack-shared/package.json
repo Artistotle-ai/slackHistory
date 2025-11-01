@@ -8,9 +8,7 @@
     "test": "jest",
     "watch": "tsc -w"
   },
-  "dependencies": {
-    // TODO: Add shared dependencies
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/jest": "^29.5.12",

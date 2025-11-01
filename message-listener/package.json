@@ -9,8 +9,8 @@
     "watch": "tsc -w"
   },
   "dependencies": {
-    "aws-sdk": "^2.1541.0"
-    // TODO: Add Slack SDK and other dependencies
+    "aws-sdk": "^2.1541.0",
+    "mnemosyne-slack-shared": "file:../slack-shared"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
