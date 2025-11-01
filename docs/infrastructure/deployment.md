@@ -55,8 +55,26 @@ aws secretsmanager put-secret-value \
 - Recreate app from manifest, or manually configure Event Subscriptions
 - Subscribe to: `message.channels`, `message.groups`, `channel_*`, `file_shared`
 
-**4. Configure GitHub (optional for CI/CD):**
-- AWS Console → CodePipeline → Connections → Create GitHub connection
+**4. Configure GitHub CodeStar Connection (required for CI/CD):**
+
+Before pipelines can work, create a CodeStar connection:
+
+```bash
+# Get the connection ARN from AWS Console
+# AWS Console → Developer Tools → Connections → Create connection
+# - Provider: GitHub
+# - Connection name: mnemosyne-github
+# - Authorize with GitHub
+```
+
+After creating the connection:
+1. Copy the connection ARN (format: `arn:aws:codestar-connections:eu-west-1:ACCOUNT_ID:connection/CONNECTION_ID`)
+2. Update all three pipeline stack files:
+   - `infrastructure/lib/pipeline-infra-stack.ts`
+   - `infrastructure/lib/pipeline-listener-stack.ts`
+   - `infrastructure/lib/pipeline-ddb-stream-stack.ts`
+3. Replace `REPLACE_WITH_CONNECTION_ID` with your actual connection ID
+4. Redeploy: `npx cdk deploy --all`
 
 ## Verify
 

@@ -76,16 +76,15 @@ export class PipelineListenerStack extends cdk.Stack {
       pipelineType: codepipeline.PipelineType.V2,
     });
 
-    // Source stage - GitHub source with path filter
+    // Source stage - GitHub source via CodeStar connection
     const sourceOutput = new codepipeline.Artifact();
-    const sourceAction = new codepipeline_actions.GitHubSourceAction({
+    const sourceAction = new codepipeline_actions.CodeStarConnectionsSourceAction({
       actionName: 'GitHub_Source',
-      owner: 'Artistotle-ai', // TODO: Confirm GitHub owner
-      repo: 'slackHistory', // TODO: Confirm repository name
+      owner: 'Artistotle-ai',
+      repo: 'slackHistory',
       branch: 'main',
-      oauthToken: cdk.SecretValue.secretsManager('github-token'), // TODO: Create GitHub token secret
+      connectionArn: `arn:aws:codestar-connections:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:connection/REPLACE_WITH_CONNECTION_ID`, // TODO: Replace with actual CodeStar connection ARN
       output: sourceOutput,
-      trigger: codepipeline_actions.GitHubTrigger.WEBHOOK,
     });
 
     pipeline.addStage({
