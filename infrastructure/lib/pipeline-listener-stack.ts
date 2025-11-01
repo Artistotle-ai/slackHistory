@@ -6,6 +6,7 @@ import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { BaseRolesStack } from './base-roles-stack';
 
 export interface PipelineListenerStackProps extends cdk.StackProps {
@@ -63,11 +64,33 @@ export class PipelineListenerStack extends cdk.Stack {
       resources: [`arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:${appPrefix}MessageListener`],
     }));
 
+    // Allow writing build logs to CloudWatch Logs
+    codeBuildRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogStreams',
+      ],
+      resources: [
+        `arn:aws:logs:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:log-group:/aws/codebuild/*`,
+        `arn:aws:logs:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:log-group:/aws/codebuild/*:log-stream:*`,
+      ],
+    }));
+
     // Single CodeBuild project for Lambda build and deploy
     // Using CfnProject directly to specify Lambda compute with ARM image
     // Changed logical ID to force replacement of old PipelineProject-based resource
-    const lambdaBuildDeployProject = new codebuild.CfnProject(this, 'LambdaBuildDeployProjectV2', {
-      name: `${appPrefix}MessageListenerBuildDeployV2`,
+    // Proactive log group with 7-day retention
+    const listenerBuildLogGroup = new logs.LogGroup(this, 'ListenerBuildLogs', {
+      logGroupName: `/aws/codebuild/${appPrefix}MessageListenerBuildDeployV3`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const lambdaBuildDeployProject = new codebuild.CfnProject(this, 'LambdaBuildDeployProjectV3', {
+      name: `${appPrefix}MessageListenerBuildDeployV3`,
       artifacts: {
         type: 'CODEPIPELINE',
       },
@@ -86,6 +109,12 @@ export class PipelineListenerStack extends cdk.Stack {
             value: `${appPrefix}MessageListener`,
           },
         ],
+      },
+      logsConfig: {
+        cloudWatchLogs: {
+          status: 'ENABLED',
+          groupName: listenerBuildLogGroup.logGroupName,
+        },
       },
       source: {
         type: 'CODEPIPELINE',
@@ -126,7 +155,7 @@ export class PipelineListenerStack extends cdk.Stack {
 
     // Build and Deploy stage (combined)
     const buildDeployAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'Lambda_Build_Deploy',
+      actionName: 'Lambda_Build_Deploy_V3',
       project: project,
       input: sourceOutput,
     });

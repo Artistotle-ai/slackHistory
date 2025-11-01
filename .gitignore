@@ -118,3 +118,6 @@ slack_export/
 *.slack
 token.txt
 
+/.*
+CLAUDE.md
+
