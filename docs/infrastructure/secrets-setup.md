@@ -2,6 +2,8 @@
 
 Configure Slack credentials for Mnemosyne using the app manifest.
 
+Part of [Deployment Guide](./deployment.md).
+
 ## Required Secrets
 
 - **Bot Token** (`xoxb-...`) - API authentication for posting messages, reading events

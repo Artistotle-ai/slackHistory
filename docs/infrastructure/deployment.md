@@ -2,13 +2,15 @@
 
 Deploy Mnemosyne infrastructure to AWS using CDK.
 
+See [Architecture](./architecture.md) for stack details.
+
 ## Prerequisites
 
 - AWS account with deployment permissions
-- AWS CLI configured
+- AWS CLI configured (`aws configure`)
 - Node.js 22+
 - CDK CLI: `npm install -g aws-cdk`
-- Slack bot credentials ([setup guide](./secrets-setup.md))
+- Slack app created ([secrets setup](./secrets-setup.md))
 
 ## Deploy
 
@@ -110,6 +112,18 @@ npx cdk deploy MnemosyneMainInfraStack
 - Check Lambda logs for errors
 - Verify signing secret in Secrets Manager
 - Test URL: `curl -X POST https://your-function-url.lambda-url.eu-west-1.on.aws/`
+
+## Cost Management
+
+Infrastructure includes lifecycle policies to minimize costs:
+- S3 artifacts: 7-day expiration
+- S3 files: 90-day transition to Infrequent Access
+- CloudWatch logs: 7-day retention
+- DynamoDB: PITR disabled
+
+See [Cost Optimization](./cost-optimization.md) for details.
+
+**Estimated cost:** $19-22/month (scales with usage)
 
 ## Cleanup
 

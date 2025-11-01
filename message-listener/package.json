@@ -9,8 +9,10 @@
     "watch": "tsc -w"
   },
   "dependencies": {
-    "aws-sdk": "^2.1541.0"
-    // TODO: Add Slack SDK and other dependencies
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-secrets-manager": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "mnemosyne-slack-shared": "file:../slack-shared"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

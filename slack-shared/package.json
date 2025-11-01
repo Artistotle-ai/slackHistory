@@ -3,14 +3,13 @@
   "version": "1.0.0",
   "description": "Shared utilities and types for Mnemosyne Slack functions",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "jest",
     "watch": "tsc -w"
   },
-  "dependencies": {
-    // TODO: Add shared dependencies
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/jest": "^29.5.12",

@@ -37,29 +37,29 @@ Primary keys:
 - **itemId** (partition key) — string
 - **timestamp** (sort key) — string
 
-All item types are distinguished by a static prefix in PK.
+All item types are distinguished by a static prefix in itemId.
 
 ### Item types & key patterns
 
 **Message item**
 
 ```
-PK = "message#{team_id}#{channel_id}"
-SK = "{ts}"         # ts is Slack event timestamp (string)
+itemId = "message#{team_id}#{channel_id}"
+timestamp = "{ts}"         # ts is Slack event timestamp (string)
 ```
 
 **Channel item**
 
 ```
-PK = "channel#{team_id}#{channel_id}"
-SK = "{event_ts}"  # event timestamp that produced the row
+itemId = "channel#{team_id}#{channel_id}"
+timestamp = "{event_ts}"  # event timestamp that produced the row
 ```
 
 **ChannelIndex shard item**
 
 ```
-PK = "channelindex#{team_id}"
-SK = "{shard_number}" //incremented when new shard is created (consistent read/write)
+itemId = "channelindex#{team_id}"
+timestamp = "{shard_number}" //incremented when new shard is created (consistent read/write)
 ```
 
 Other auxiliary rows (if needed) follow the same pattern `meta#{team_id}#{...}`.
@@ -67,8 +67,8 @@ Other auxiliary rows (if needed) follow the same pattern `meta#{team_id}#{...}`.
 ### Global Secondary Index (for threads)
 
 ```
-GSI1PK = parent   # parent = "thread#{team_id}#{thread_ts}" or absent
-GSI1SK = ts       # message ts
+parent = "thread#{team_id}#{thread_ts}"   # GSI partition key (sparse, only on thread messages)
+timestamp = "{ts}"                         # GSI sort key (message ts)
 ```
 
 GSI is sparse: only messages that belong to a thread include `parent`.
@@ -121,7 +121,7 @@ ChannelIndex shard items contain a `channels_map` attribute (map channelId -> na
 
 ## Event handling (HTTP Lambda behaviour) — concrete functionality per event
 
-All handlers parse the incoming Slack event, filter out anything not related to public channels, normalize payload and write a single-row mutation to `SlackArchive` using the PK/SK patterns above.
+All handlers parse the incoming Slack event, filter out anything not related to public channels, normalize payload and write a single-row mutation to `SlackArchive` using the itemId/timestamp patterns above.
 
 ### `message` (new message)
 
@@ -130,12 +130,12 @@ All handlers parse the incoming Slack event, filter out anything not related to 
   - If `thread_ts` not present → no parent attribute.
   - If `thread_ts` present and `thread_ts == ts` → set `parent = "thread#{team_id}#{thread_ts}"` (parent message) and still store as ordinary message row.
   - If `thread_ts` present and `thread_ts != ts` → set `parent = "thread#{team_id}#{thread_ts}"` (reply).
-- Write item: PK=`message#{team_id}#{channel_id}`, SK=`ts#{ts}`, include `files` if present.
+- Write item: itemId=`message#{team_id}#{channel_id}`, timestamp=`{ts}`, include `files` if present.
 - Do not set `deleted` attribute.
 
 ### `message_changed` (edit)
 
-- Locate existing item: PK=`message#{team_id}#{channel_id}`, SK=`ts#{edited_ts}` (use event payload to find original ts).
+- Locate existing item: itemId=`message#{team_id}#{channel_id}`, timestamp=`{edited_ts}` (use event payload to find original ts).
 - Update: overwrite `text`, `raw_event`, set `updated_ts = now()`.
 - Upsert semantics: if item missing (rare) create it with `updated_ts`.
 
@@ -153,7 +153,7 @@ All handlers parse the incoming Slack event, filter out anything not related to 
 
 #### `channel_created`
 
-- Create channel item row: PK=`channel#{team_id}#{channel_id}`, SK=`evt#{event_ts}`. Set `name` and initial `names_history`.
+- Create channel item row: itemId=`channel#{team_id}#{channel_id}`, timestamp=`{event_ts}`. Set `name` and initial `names_history`.
 
 
 #### `channel_rename` / `name` change
@@ -198,9 +198,19 @@ All handlers parse the incoming Slack event, filter out anything not related to 
 
 ---
 
-## DynamoDB Stream → File Processor Lambda (concrete)
+## DynamoDB Stream → Lambda (concrete)
 
-Trigger: `INSERT` or `MODIFY` on items where `files` exists and `files_s3` is absent (or incomplete).
+**Trigger:** `INSERT` or `MODIFY` events from DynamoDB stream
+
+**Responsibilities:**
+1. File processing (download Slack files to S3)
+2. ChannelIndex maintenance (keep channel_id → name mapping updated)
+
+**Reserved Concurrency:** 1 (serializes ChannelIndex updates to prevent conflicts)
+
+### File Processing
+
+Trigger condition: items where `files` exists and `files_s3` is absent (or incomplete).
 
 For each file attachment in the message:
 
@@ -213,17 +223,17 @@ For each file attachment in the message:
 
 Idempotency: use file\_id in S3 key and conditional put to avoid duplicate uploads.
 
-##  channel_deleted event ( if deleted is set an the value us "true" )
+### ChannelIndex Maintenance
 
-Update ChannelIndex: prefix name with deleted_
+Trigger condition: `INSERT` or `MODIFY` on channel items (itemId starts with `"channel#"`).
 
-## channel name changes
+**Channel created:** Upsert ChannelIndex shard with mapping `{channel_id: name}`
 
-Update ChannelIndex: update the name in the mapping
+**Channel rename:** Update name in ChannelIndex mapping `{channel_id: new_name}`
 
-## channel is created 
+**Channel deleted:** Prefix name with `deleted_` → `{channel_id: "deleted_<name>"}`
 
-Upsert ChannelIndex shard: add mapping channelId -> name
+**Sharding:** When ChannelIndex item >350KB, create new shard (increment timestamp). Reserved concurrency = 1 ensures serial updates.
 
 Permissions: Lambda must have network egress and proper IAM rights for S3 and to read encrypted secrets (bot token). Bot token usage requires secrecy — rotate/secure.
 
@@ -231,10 +241,10 @@ Permissions: Lambda must have network egress and proper IAM rights for S3 and to
 
 ## Query patterns
 
-- Retrieve channel messages: `PK = "message#{team_id}#{channel_id}"` query with SK begins\_with `ts#` sorted by SK.
-- Retrieve thread replies: query `GSI1` with `GSI1PK = "thread#{team_id}#{thread_ts}"` order by `GSI1SK`.
-- Get channel metadata: `PK = "channel#{team_id}#{channel_id}"` query and read latest `SK` event (or use a projection that stores a single current item per channel with a deterministic SK like `evt#current`).
-- Channel index lookup: `PK = "channelindex#{team_id}"` scan shards to find channelId mapping (or maintain a small in-memory cache populated from shards).
+- Retrieve channel messages: query where `itemId = "message#{team_id}#{channel_id}"` sorted by `timestamp`.
+- Retrieve thread replies: query GSI where `parent = "thread#{team_id}#{thread_ts}"` sorted by `timestamp`.
+- Get channel metadata: query where `itemId = "channel#{team_id}#{channel_id}"` and read latest `timestamp` event.
+- Channel index lookup: query where `itemId = "channelindex#{team_id}"` scan shards to find channelId mapping (or maintain a small in-memory cache populated from shards).
 
 ---
 
@@ -258,8 +268,8 @@ Permissions: Lambda must have network egress and proper IAM rights for S3 and to
 
 ```json
 {
-  "PK": "message#T12345#C23456",
-  "SK": "ts#1620000000.000200",
+  "itemId": "message#T12345#C23456",
+  "timestamp": "1620000000.000200",
   "type": "message",
   "team_id": "T12345",
   "channel_id": "C23456",

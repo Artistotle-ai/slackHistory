@@ -36,7 +36,14 @@ export class BaseRolesStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      versioned: true,
+      versioned: false, // Disabled to reduce costs - artifacts don't need versioning
+      lifecycleRules: [
+        {
+          id: 'DeleteOldArtifacts',
+          enabled: true,
+          expiration: cdk.Duration.days(7), // Delete old artifacts after 7 days
+        },
+      ],
     });
 
     // Secrets Manager placeholders for Slack credentials
@@ -95,11 +102,13 @@ export class BaseRolesStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'SlackBotTokenSecretArn', {
       value: this.slackBotTokenSecret.secretArn,
       description: 'Secrets Manager ARN for Slack bot token',
+      exportName: `${appPrefix}SlackBotTokenSecretArn`,
     });
 
     new cdk.CfnOutput(this, 'SlackSigningSecretArn', {
       value: this.slackSigningSecretSecret.secretArn,
       description: 'Secrets Manager ARN for Slack signing secret',
+      exportName: `${appPrefix}SlackSigningSecretArn`,
     });
 
     new cdk.CfnOutput(this, 'CiRoleArn', {

@@ -44,33 +44,18 @@ export class PipelineListenerStack extends cdk.Stack {
     const githubConnectionArn = cdk.Fn.importValue(`${appPrefix}GitHubConnectionArn`);
 
     // Single CodeBuild project for Lambda build and deploy
+    // Uses buildspec YAML file from infrastructure/buildspecs/ folder (relative to repo root)
     const lambdaBuildDeployProject = new codebuild.PipelineProject(this, 'LambdaBuildDeployProject', {
       projectName: `${appPrefix}MessageListenerBuildDeploy`,
-      buildSpec: codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          install: {
-            commands: [
-              'cd message-listener',
-              'npm ci',
-            ],
-          },
-          build: {
-            commands: [
-              'cd message-listener',
-              'npm run build',
-              'npm run test', // TODO: Add tests
-              'cd ..',
-              'aws lambda update-function-code --function-name MnemosyneMessageListener --zip-file fileb://message-listener/dist/lambda.zip',
-            ],
-          },
-        },
-      }),
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/message-listener-buildspec.yml'),
       environment: {
         buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_ARM_3,
         environmentVariables: {
           ARTIFACT_BUCKET: {
             value: artifactBucket.bucketName,
+          },
+          FUNCTION_NAME: {
+            value: `${appPrefix}MessageListener`,
           },
         },
       },
@@ -80,10 +65,15 @@ export class PipelineListenerStack extends cdk.Stack {
     artifactBucket.grantReadWrite(lambdaBuildDeployProject);
 
     // Add Lambda update permissions to CodeBuild role
+    // Pipeline is the ONLY way to deploy Lambda code
     lambdaBuildDeployProject.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ['lambda:UpdateFunctionCode'],
-      resources: [`arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:MnemosyneMessageListener`],
+      actions: [
+        'lambda:UpdateFunctionCode',
+        'lambda:GetFunction',
+        'lambda:UpdateFunctionConfiguration',
+      ],
+      resources: [`arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:${appPrefix}MessageListener`],
     }));
 
     // CodePipeline for message-listener deployment

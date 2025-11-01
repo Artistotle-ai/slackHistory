@@ -20,6 +20,11 @@ export interface PipelineInfraStackProps extends cdk.StackProps {
  * - Single CodeBuild step: npm ci, build, synth, deploy
  * - Deploys all CDK stacks automatically (no manual approval)
  * - Pipeline Type V2 for enhanced features and performance
+ * 
+ * TODO: Consider consolidating all Lambda pipelines into a single pipeline
+ * to reduce costs and simplify deployments. Can use path filters to trigger
+ * only relevant builds based on changed directories. Add caching to skip
+ * unchanged builds.
  */
 export class PipelineInfraStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PipelineInfraStackProps) {
