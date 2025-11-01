@@ -22,6 +22,137 @@ export interface SlackEvent {
   [key: string]: any;
 }
 
+// Strict event type discriminated unions
+export type StrictSlackEvent =
+  | UrlVerificationEvent
+  | MessageEvent
+  | MessageChangedEvent
+  | MessageDeletedEvent
+  | ChannelCreatedEvent
+  | ChannelRenameEvent
+  | ChannelDeletedEvent
+  | ChannelArchiveEvent
+  | ChannelUnarchiveEvent
+  | ChannelIdChangedEvent
+  | ChannelPurposeEvent
+  | ChannelTopicEvent
+  | ChannelConvertToPrivateEvent
+  | ChannelConvertToPublicEvent
+  | UnknownEvent;
+
+export interface UrlVerificationEvent {
+  type: "url_verification";
+  challenge: string;
+  token?: string;
+}
+
+export interface BaseEvent {
+  type: string;
+  team_id: string;
+  event_ts?: string;
+}
+
+export interface MessageEvent extends BaseEvent {
+  type: "message";
+  subtype?: string;
+  channel: string;
+  channel_id?: string;
+  ts: string;
+  user?: string;
+  text?: string;
+  thread_ts?: string;
+  files?: SlackFile[];
+}
+
+export interface MessageChangedEvent extends BaseEvent {
+  type: "message";
+  subtype: "message_changed";
+  channel: string;
+  channel_id?: string;
+  message: SlackMessage;
+  previous_message?: SlackMessage;
+  edited?: {
+    user: string;
+    ts: string;
+  };
+}
+
+export interface MessageDeletedEvent extends BaseEvent {
+  type: "message";
+  subtype: "message_deleted";
+  channel: string;
+  channel_id?: string;
+  deleted_ts: string;
+  ts?: string;
+}
+
+export interface ChannelCreatedEvent extends BaseEvent {
+  type: "channel_created";
+  channel: {
+    id: string;
+    name: string;
+    is_private?: boolean;
+  };
+}
+
+export interface ChannelRenameEvent extends BaseEvent {
+  type: "channel_rename";
+  channel: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface ChannelDeletedEvent extends BaseEvent {
+  type: "channel_deleted";
+  channel: string;
+}
+
+export interface ChannelArchiveEvent extends BaseEvent {
+  type: "channel_archive";
+  channel: string;
+  user: string;
+}
+
+export interface ChannelUnarchiveEvent extends BaseEvent {
+  type: "channel_unarchive";
+  channel: string;
+  user: string;
+}
+
+export interface ChannelIdChangedEvent extends BaseEvent {
+  type: "channel_id_changed";
+  channel: string;
+  previous_channel?: string;
+}
+
+export interface ChannelPurposeEvent extends BaseEvent {
+  type: "channel_purpose";
+  channel: string;
+  purpose?: string;
+}
+
+export interface ChannelTopicEvent extends BaseEvent {
+  type: "channel_topic";
+  channel: string;
+  topic?: string;
+}
+
+export interface ChannelConvertToPrivateEvent extends BaseEvent {
+  type: "channel_convert_to_private";
+  channel: string;
+}
+
+export interface ChannelConvertToPublicEvent extends BaseEvent {
+  type: "channel_convert_to_public";
+  channel: string;
+}
+
+export interface UnknownEvent {
+  type: string;
+  [key: string]: unknown;
+}
+
 export interface SlackMessage {
   type: string;
   subtype?: string;

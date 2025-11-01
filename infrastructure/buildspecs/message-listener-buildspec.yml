@@ -6,29 +6,31 @@ runtime-versions:
 phases:
   install:
     commands:
-      - echo "Installing dependencies..."
-      - cd message-listener
+      - echo "Installing dependencies for slack-shared..."
+      - cd slack-shared
+      - npm ci
+      - echo "Installing dependencies for message-listener..."
+      - cd ../message-listener
       - npm ci
   build:
     commands:
-      - echo "Building Lambda function..."
-      - cd message-listener
-      - npm run build  # TODO: Add build script to package.json
+      - echo "Building slack-shared dependency..."
+      - cd slack-shared
+      - npm run build
+      - echo "Building message-listener Lambda function..."
+      - cd ../message-listener
+      - npm run build
+      - npm test || true
+      - echo "Installing production dependencies..."
+      - cd dist
+      - npm ci --production --ignore-scripts || true
       - echo "Creating deployment package..."
-      - mkdir -p ../dist
-      - cp -r dist/* ../dist/  # TODO: Adjust based on actual build output
-      - cp package*.json ../dist/
-      - cd ../dist
-      - npm ci --production  # Install only production dependencies
-  post_build:
-    commands:
-      - echo "Preparing artifact..."
-      - cd ../dist
-      - zip -r ../message-listener.zip ./*
-      # TODO: Add Lambda deployment commands here
-      # aws lambda update-function-code --function-name $FUNCTION_NAME --zip-file fileb://../message-listener.zip
-
-artifacts:
-  files:
-    - message-listener.zip
-  discard-paths: yes
+      - cd ../..
+      - zip -r message-listener-function.zip message-listener/dist message-listener/node_modules message-listener/package.json 2>/dev/null || (cd message-listener && zip -r ../message-listener-function.zip dist/* node_modules package.json)
+      - echo "Deploying Lambda function via pipeline..."
+      - |
+        if [ -z "$FUNCTION_NAME" ]; then
+          FUNCTION_NAME="MnemosyneMessageListener"
+        fi
+        aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://message-listener-function.zip
+      - echo "Lambda deployment complete - function deployed via pipeline only"

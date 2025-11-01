@@ -91,22 +91,36 @@ export class MainInfraStack extends cdk.Stack {
     // Add S3 permissions
     this.slackFilesBucket.grantReadWrite(lambdaExecutionRole);
 
-    // TODO: Add Secrets Manager read permissions for Slack secrets
+    // Add Secrets Manager read permissions for Slack secrets
+    lambdaExecutionRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['secretsmanager:GetSecretValue'],
+        resources: [
+          `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:${appPrefix}/slack/*`,
+        ],
+      })
+    );
 
     // Message listener Lambda function
+    // Code is deployed ONLY via pipeline - using placeholder inline code for initial creation
     this.messageListenerFunction = new lambda.Function(this, 'MessageListenerFunction', {
       functionName: `${appPrefix}MessageListener`,
       runtime: lambda.Runtime.NODEJS_22_X,
       architecture: lambda.Architecture.ARM_64,
-      code: lambda.Code.fromAsset('../message-listener/src'), // TODO: Update path when Lambda code is ready
+      // Placeholder code - actual code deployed via pipeline only
+      code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 503, body: "Lambda not deployed via pipeline" });'),
       handler: 'index.handler',
       role: lambdaExecutionRole,
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
-        // TODO: Add environment variables for secrets ARNs
+        SLACK_SIGNING_SECRET_ARN: `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:${appPrefix}/slack/signing-secret`,
+        SLACK_BOT_TOKEN_ARN: `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:${appPrefix}/slack/bot-token`,
+        AWS_REGION: cdk.Aws.REGION,
       },
+      description: 'Deployed via CodePipeline only - do not update manually',
     });
 
     // Function URL for Slack Events API
@@ -124,7 +138,7 @@ export class MainInfraStack extends cdk.Stack {
       functionName: `${appPrefix}FileProcessor`,
       runtime: lambda.Runtime.NODEJS_22_X,
       architecture: lambda.Architecture.ARM_64,
-      code: lambda.Code.fromAsset('../file-processor/src'), // TODO: Update path when Lambda code is ready
+      code: lambda.Code.fromAsset('../file-processor/dist'), // Built TypeScript output
       handler: 'index.handler',
       role: lambdaExecutionRole,
       timeout: cdk.Duration.minutes(5), // Longer timeout for file processing
