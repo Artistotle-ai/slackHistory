@@ -51,7 +51,7 @@ export class PipelineInfraStack extends cdk.Stack {
         phases: {
           install: {
             commands: [
-              'npm install -g aws-cdk@2.221.1',
+              'npm install -g aws-cdk',
             ],
           },
           build: {
@@ -66,7 +66,7 @@ export class PipelineInfraStack extends cdk.Stack {
         },
       }),
       environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
+        buildImage: codebuild.LinuxBuildImage.STANDARD_8_0,
       },
     });
 

@@ -96,7 +96,7 @@ export class MainInfraStack extends cdk.Stack {
     // Message listener Lambda function
     this.messageListenerFunction = new lambda.Function(this, 'MessageListenerFunction', {
       functionName: `${appPrefix}MessageListener`,
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset('../message-listener/src'), // TODO: Update path when Lambda code is ready
       handler: 'index.handler',
       role: lambdaExecutionRole,
@@ -121,7 +121,7 @@ export class MainInfraStack extends cdk.Stack {
     // File processor Lambda function (triggered by DynamoDB stream)
     this.fileProcessorFunction = new lambda.Function(this, 'FileProcessorFunction', {
       functionName: `${appPrefix}FileProcessor`,
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset('../file-processor/src'), // TODO: Update path when Lambda code is ready
       handler: 'index.handler',
       role: lambdaExecutionRole,
