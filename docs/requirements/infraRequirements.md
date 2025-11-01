@@ -52,11 +52,10 @@ repo/
    - Lambda permissions: DDB access, S3 write, Secrets Manager read
 
 3. **Pipeline stacks**
-   - **Infra pipeline**: triggers on all main branch pushes, combined CDK build & deploy (no approval steps)
+   - **Infra pipeline**: triggers on all main branch pushes, combined CDK build & deploy (external buildspec)
    - **Listener pipeline**: triggers on all main branch pushes, combined Lambda build & deploy
    - **DDB stream pipeline**: triggers on all main branch pushes, combined Lambda build & deploy
-   - *Note*: File path filtering not available in CDK v2.221.1 L2 constructs ([GitHub #10265](https://github.com/aws/aws-cdk/issues/10265), [#35379](https://github.com/aws/aws-cdk/issues/35379))
-   - File path filters require L1 (CfnPipeline) constructs or CloudFormation support
+   - All buildspecs are external files (no inline buildspecs)
 
 ## Cross-Stack Dependencies
 Pipeline stacks create their own dedicated CI roles and use static resource references to avoid cyclic dependencies. Each pipeline is self-contained and doesn't depend on other stacks.

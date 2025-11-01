@@ -41,30 +41,15 @@ export class PipelineInfraStack extends cdk.Stack {
 
   private createPipeline(appPrefix: string, artifactBucket: s3.IBucket) {
     // Import GitHub connection ARN from BaseRolesStack export
+    // Use Fn.importValue to reference the export from BaseRolesStack
+    // Note: During synthesis, this will resolve at deploy time
     const githubConnectionArn = cdk.Fn.importValue(`${appPrefix}GitHubConnectionArn`);
 
     // Single CodeBuild project for CDK build and deploy
-    const cdkBuildDeployProject = new codebuild.PipelineProject(this, 'CdkBuildDeployProject', {
-      projectName: `${appPrefix}CdkBuildDeploy`,
-      buildSpec: codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          install: {
-            commands: [
-              'npm install -g aws-cdk',
-            ],
-          },
-          build: {
-            commands: [
-              'cd infrastructure',
-              'npm ci',
-              'npm run build',
-              'npx cdk synth --quiet',
-              'npx cdk deploy --all --require-approval never --outputs-file outputs.json',
-            ],
-          },
-        },
-      }),
+    // Using v2 suffix to force CloudFormation update (workaround for buildspec change detection)
+    const cdkBuildDeployProject = new codebuild.PipelineProject(this, 'CdkBuildDeployProjectV2', {
+      projectName: `${appPrefix}CdkBuildDeployV2`,
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/infrastructure-buildspec.yml'),
       environment: {
         buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_ARM_3,
       },
@@ -100,8 +85,9 @@ export class PipelineInfraStack extends cdk.Stack {
     });
 
     // Build and Deploy stage (combined)
+    // Action name changed to force pipeline update with new CodeBuild project
     const buildDeployAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'CDK_Build_Deploy',
+      actionName: 'CDK_Build_Deploy_V2',
       project: cdkBuildDeployProject,
       input: sourceOutput,
     });

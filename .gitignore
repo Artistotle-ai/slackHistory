@@ -69,6 +69,11 @@ yarn.lock
 # CDK
 cdk.out/
 
+# TypeScript compiled files
+*.js
+*.d.ts
+!jest.config.js
+
 # Environment variables
 .env
 .env.local

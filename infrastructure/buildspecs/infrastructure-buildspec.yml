@@ -1,0 +1,12 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - npm install -g aws-cdk
+  build:
+    commands:
+      - cd infrastructure
+      - npm run build
+      - npx cdk synth --quiet
+      - npx cdk deploy --all --require-approval never --outputs-file outputs.json
