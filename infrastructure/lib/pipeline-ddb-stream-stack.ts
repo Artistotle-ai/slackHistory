@@ -68,8 +68,8 @@ export class PipelineDdbStreamStack extends cdk.Stack {
         },
       }),
       environment: {
-        buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2_STANDARD_1_0,
-        computeType: codebuild.ComputeType.SMALL,
+        buildImage: codebuild.LinuxArmBuildImage.fromDockerRegistry('aws/codebuild/amazonlinux-aarch64-lambda-standard:nodejs22'),
+        computeType: codebuild.ComputeType.LAMBDA_1GB,
         environmentVariables: {
           ARTIFACT_BUCKET: {
             value: artifactBucket.bucketName,
