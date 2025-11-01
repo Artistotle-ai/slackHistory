@@ -5,6 +5,7 @@ import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { BaseRolesStack } from './base-roles-stack';
 
 export interface PipelineInfraStackProps extends cdk.StackProps {
@@ -81,12 +82,34 @@ export class PipelineInfraStack extends cdk.Stack {
       resources: ['*'], // TODO: Restrict to specific resources for security
     }));
 
+    // Allow writing build logs to CloudWatch Logs
+    codeBuildRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogStreams',
+      ],
+      resources: [
+        `arn:aws:logs:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:log-group:/aws/codebuild/*`,
+        `arn:aws:logs:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:log-group:/aws/codebuild/*:log-stream:*`,
+      ],
+    }));
+
     // Single CodeBuild project for CDK build and deploy
     // Using CfnProject directly to specify Lambda compute with ARM image
     // Lambda compute requires direct CloudFormation properties, not CDK high-level constructs
     // Using V3 suffix to force replacement of old PipelineProject-based resource
     const buildSpec = codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/infrastructure-buildspec.yml');
     
+    // Proactive log group with 7-day retention
+    const cdkBuildLogGroup = new logs.LogGroup(this, 'CdkBuildLogs', {
+      logGroupName: `/aws/codebuild/${appPrefix}CdkBuildDeployV3`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const cdkBuildDeployProject = new codebuild.CfnProject(this, 'CdkBuildDeployProjectV3', {
       name: `${appPrefix}CdkBuildDeployV3`,
       artifacts: {
@@ -97,6 +120,12 @@ export class PipelineInfraStack extends cdk.Stack {
         computeType: 'BUILD_LAMBDA_1GB',
         image: 'aws/codebuild/amazonlinux-aarch64-lambda-standard:nodejs22',
         imagePullCredentialsType: 'CODEBUILD',
+      },
+      logsConfig: {
+        cloudWatchLogs: {
+          status: 'ENABLED',
+          groupName: cdkBuildLogGroup.logGroupName,
+        },
       },
       source: {
         type: 'CODEPIPELINE',
@@ -135,7 +164,7 @@ export class PipelineInfraStack extends cdk.Stack {
     // Build and Deploy stage (combined)
     // Action name changed to force pipeline update with new CodeBuild project
     const buildDeployAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'CDK_Build_Deploy_V2',
+      actionName: 'CDK_Build_Deploy_V3',
       project: project,
       input: sourceOutput,
     });
