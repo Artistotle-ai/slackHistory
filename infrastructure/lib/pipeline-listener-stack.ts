@@ -50,6 +50,7 @@ export class PipelineListenerStack extends cdk.Stack {
       buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/message-listener-buildspec.yml'),
       environment: {
         buildImage: codebuild.LinuxArmBuildImage.fromDockerRegistry('aws/codebuild/amazonlinux-aarch64-lambda-standard:nodejs22'),
+        computeType: codebuild.ComputeType.SMALL,
         environmentVariables: {
           ARTIFACT_BUCKET: {
             value: artifactBucket.bucketName,
