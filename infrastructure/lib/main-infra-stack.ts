@@ -173,7 +173,8 @@ export class MainInfraStack extends cdk.Stack {
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
         SLACK_FILES_BUCKET: this.slackFilesBucket.bucketName,
-        // TODO: Add environment variables for secrets ARNs
+        SLACK_BOT_TOKEN_ARN: cdk.Fn.importValue(`${appPrefix}SlackBotTokenSecretArn`),
+        AWS_REGION: cdk.Aws.REGION,
       },
       description: 'Deployed via CodePipeline only - do not update manually',
     });

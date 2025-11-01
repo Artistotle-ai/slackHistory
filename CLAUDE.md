@@ -45,20 +45,20 @@ Table: `MnemosyneSlackArchive`
 
 Messages:
 ```
-PK = "message#{team_id}#{channel_id}"
-SK = "ts#{ts}"
+itemId = "message#{team_id}#{channel_id}"
+timestamp = "{ts}"
 ```
 
 Channels:
 ```
-PK = "channel#{team_id}#{channel_id}"
-SK = "evt#{event_ts}"
+itemId = "channel#{team_id}#{channel_id}"
+timestamp = "{event_ts}"
 ```
 
 Channel Index:
 ```
-PK = "channelindex#{team_id}"
-SK = "{shard_number}"
+itemId = "channelindex#{team_id}"
+timestamp = "{shard_number}"
 ```
 
 **GSI (ThreadIndex)** - Sparse index for thread retrieval:
@@ -159,7 +159,7 @@ After deploying BaseRolesStack, manually populate these Secrets Manager secrets:
 1. `Mnemosyne/slack/bot-token` - Slack Bot User OAuth Token
 2. `Mnemosyne/slack/signing-secret` - Slack Signing Secret for request verification
 
-The Lambda functions need IAM permissions to read these secrets (currently TODO in infrastructure).
+Lambda functions import secret ARNs from BaseRolesStack exports via `cdk.Fn.importValue()`. IAM permissions grant `secretsmanager:GetSecretValue` on `Mnemosyne/slack/*`.
 
 ## Event Handling Specifics
 
@@ -177,29 +177,62 @@ The Lambda functions need IAM permissions to read these secrets (currently TODO 
 - `channel_convert_to_private/public` - Update `visibility` field (app continues storing events regardless)
 
 ### File Processing (DynamoDB Stream)
+**Status:** Not yet implemented. file-processor Lambda exists but contains placeholder code.
+
+**Planned behavior:**
 - Triggered on INSERT/MODIFY where `files` exists and `files_s3` is absent
 - Downloads files from Slack using bot token Authorization header
 - Stores in S3 at `slack/{team_id}/{channel_id}/{ts}/{file_id}`
 - Updates DynamoDB item with `files_s3` array of S3 URIs
 - On failures, sets `files_fetch_failed = true` after retries
 
-## Important Implementation Notes
+**Missing:**
+- file-processor implementation
+- DynamoDB stream configuration on table
+- Event source mapping connecting stream to Lambda
 
-1. **Thread Handling**: Messages with `thread_ts` get `parent` attribute set to `"thread#{team_id}#{thread_ts}"` for GSI querying
-2. **Public Channels Only**: Event handlers should filter and only process public channel events (though app continues archiving channels that become private)
+## Implementation Status
+
+**Implemented:**
+- message-listener Lambda (fully functional, deployed via pipeline)
+- DynamoDB table with GSI for threads
+- S3 bucket for files with lifecycle policies
+- Slack signature verification
+- All message and channel event handlers
+- CloudWatch log groups with 7-day retention
+- Cost optimizations (S3 lifecycle, log retention, PITR disabled)
+
+**Not Implemented:**
+- file-processor Lambda (placeholder code only)
+- DynamoDB stream configuration
+- Event source mapping for stream
+- ChannelIndex management
+
+**Key Constraints:**
+1. **Thread Handling**: Messages with `thread_ts` get `parent` attribute for GSI querying
+2. **No Channel Filtering**: Lambda stores all events (public and private)
 3. **No Backfill**: System only captures events from deployment forward
-4. **Idempotency**: Use conditional writes and file_id in S3 keys to prevent duplicates
-5. **Function URL**: message-listener uses public Function URL with `NONE` auth type (TODO: restrict CORS to Slack domains)
-6. **DynamoDB Stream**: Not yet configured on the table (TODO in main-infra-stack.ts:139)
+4. **Function URL**: Public endpoint with CORS allowedOrigins: `['*']`
+5. **Lambda Deployment**: Code deployed ONLY via CodePipeline, never manually
 
-## Testing Strategy
+## Cost Optimization
 
-Tests are configured with Jest and ts-jest for all TypeScript packages. Test files should follow the pattern `*.test.ts`.
+Infrastructure configured for minimal AWS costs:
 
-## Common Gotchas
+- **S3 Lifecycle**: Artifacts expire after 7 days, files transition to IA after 90 days
+- **CloudWatch Logs**: 7-day retention on all Lambda log groups
+- **DynamoDB**: PITR disabled (not needed per requirements)
+- **S3 Versioning**: Suspended on all buckets
+- **Lambda**: ARM64 architecture (20% cheaper than x86)
 
-- Lambda code paths in CDK currently point to `src/` folders but should point to built `dist/` folders
-- GitHub CodeStar connection requires manual authorization in AWS Console after first deployment
-- Pipeline buildspecs expect specific directory structure and npm scripts
-- Boolean attributes must be omitted (not set to false) per storage optimization rules
-- Item size limit is 400KB - monitor and shard as needed
+See `docs/infrastructure/cost-optimization.md` for details.
+
+**Estimated monthly cost:** $19-22 (scales with usage)
+
+## Common Issues
+
+- **Lambda placeholder code**: Both Lambdas use placeholder inline code until deployed via pipeline
+- **CodeStar authorization**: GitHub connection requires manual authorization in AWS Console post-deployment
+- **Secret ARN suffix**: Secrets Manager ARNs have random suffixes, imported via CloudFormation exports
+- **Boolean storage**: Omit false booleans, use `REMOVE` for attributes
+- **DDB item limit**: 400KB max, shard ChannelIndex at 350KB
