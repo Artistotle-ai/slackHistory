@@ -1,4 +1,4 @@
-import { TOKEN_DEFAULT_TTL, getSecretValue, getFromCache, hasInCache } from "mnemosyne-slack-shared";
+import { TOKEN_DEFAULT_TTL, getSecretValue, getFromCache, hasInCache, formatErrorMessage } from "mnemosyne-slack-shared";
 
 interface Config {
   defaultCacheTtl: number;
@@ -45,7 +45,7 @@ export async function getSigningSecret(config: Config): Promise<string> {
     return await getSecretValue(config.signingSecretArn, config.region);
   } catch (error) {
     throw new Error(
-      `Failed to retrieve signing secret from Secrets Manager: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to retrieve signing secret from Secrets Manager: ${formatErrorMessage(error)}`
     );
   }
 }

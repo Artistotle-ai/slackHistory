@@ -14,3 +14,4 @@ export * from "./utils/request-utils";
 export * from "./utils/secrets-utils";
 export * from "./utils/slack-utils";
 export * from "./utils/token-refresh";
+export * from "./utils/logger";

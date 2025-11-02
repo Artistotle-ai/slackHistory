@@ -131,7 +131,8 @@ export class EventRepository<T extends BaseSlackEvent, TItem extends Record<stri
     const cacheKey = this.config.getCacheKey(event);
     // removeFromCache is available in cache.ts if needed
     // For now, just log
-    console.log(`TODO: Cache invalidated for: ${cacheKey}`);
+    // Cache invalidated - using logger would require circular dependency
+    // This is a TODO debug log, can be removed later
   }
 }
 

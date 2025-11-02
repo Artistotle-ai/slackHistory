@@ -1,6 +1,7 @@
 import { getFromCache, setInCache } from "../utils/cache";
 import { getSecretValue } from "../utils/secrets-utils";
 import { SECRET_CACHE_TTL } from "./settings";
+import { formatErrorMessage } from "../utils/utils";
 
 const OAUTH_CREDENTIALS_CACHE_KEY = "oauth_credentials";
 
@@ -85,7 +86,7 @@ export async function getOAuthCredentials(config: OAuthConfig): Promise<OAuthCre
     return credentials;
   } catch (error) {
     throw new Error(
-      `Failed to retrieve OAuth credentials from Secrets Manager: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to retrieve OAuth credentials from Secrets Manager: ${formatErrorMessage(error)}`
     );
   }
 }

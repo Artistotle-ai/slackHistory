@@ -44,3 +44,11 @@ export function getTokenItemCacheKey(teamId: string, tableName: string): string 
 export function getTokenItemDbId(teamId: string): string {
   return `oauth#${teamId}`;
 }
+
+/**
+ * Format error message consistently across the application
+ * Extracts message from Error objects, otherwise converts to string
+ */
+export function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

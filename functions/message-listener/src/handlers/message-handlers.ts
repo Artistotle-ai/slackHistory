@@ -4,6 +4,7 @@ import {
   MessageChangedEvent,
   MessageDeletedEvent,
   SlackEvent,
+  logger,
 } from "mnemosyne-slack-shared";
 import {
   getMessageItemId,
@@ -70,7 +71,7 @@ export async function handleMessage(
   // Using the traditional approach (for now, can be refactored)
   const item = buildMessageItem(event, teamId, channelId);
   await putItem(tableName, item);
-  console.log(`Stored message: ${item.itemId}, timestamp: ${item.timestamp}`);
+  logger.info(`Stored message: ${item.itemId}, timestamp: ${item.timestamp}`);
   
   // TODO: Refactor to use repository pattern:
   // const eventWithContext = { ...event, team_id: teamId, channel_id: channelId };
@@ -92,32 +93,43 @@ export async function handleMessageChanged(
 
   const itemId = getMessageItemId(teamId, channelId);
   const timestamp = message.ts;
+  
+  // Use edited timestamp if available, otherwise event timestamp, otherwise current time
+  // This ensures we always have a valid timestamp for tracking when the edit occurred
   const updatedTs = event.edited?.ts || event.event_ts || new Date().toISOString();
 
+  // Dynamically build update expression - include user only if present in edited message
+  // Some edits don't include user (e.g., bot edits), so we only update if provided
   const updateExpression = `SET text = :text, raw_event = :raw_event, updated_ts = :updated_ts${message.user ? ", user = :user" : ""}`;
   const values: Record<string, unknown> = {
-    ":text": message.text || "",
-    ":raw_event": event as SlackEvent,
+    ":text": message.text || "", // Empty string if text was removed
+    ":raw_event": event as SlackEvent, // Store full event for debugging/audit
     ":updated_ts": updatedTs,
   };
   if (message.user) values[":user"] = message.user;
 
   try {
+    // Attempt to update existing message
     await updateItem(tableName, { itemId, timestamp }, updateExpression, values);
-    console.log(`Updated message: ${itemId}, timestamp: ${timestamp}`);
+    logger.info(`Updated message: ${itemId}, timestamp: ${timestamp}`);
   } catch (error) {
-    // Upsert: create if missing
+    // Upsert pattern: if message doesn't exist, create it instead of failing
+    // This handles race conditions where edit arrives before original message
+    // Also handles cases where original message was never stored (edge case)
     const awsError = error as { code?: string };
     if (awsError.code === "ValidationException" || awsError.code === "ResourceNotFoundException") {
+      // Message doesn't exist - create it with edit information
+      // This is idempotent-safe since we use the original message timestamp
       const item = buildMessageItem(
         { ...event, ts: timestamp, channel: channelId },
         teamId,
         channelId
       );
-      item.updated_ts = updatedTs;
+      item.updated_ts = updatedTs; // Mark that this was an edited message
       await putItem(tableName, item);
-      console.log(`Created missing message item: ${itemId}, timestamp: ${timestamp}`);
+      logger.info(`Created missing message item: ${itemId}, timestamp: ${timestamp}`);
     } else {
+      // Re-throw unexpected errors (e.g., permission errors, throttling)
       throw error;
     }
   }
@@ -138,6 +150,6 @@ export async function handleMessageDeleted(
     "SET deleted = :true",
     { ":true": true }
   );
-  console.log(`Marked message as deleted: ${itemId}, timestamp: ${event.deleted_ts}`);
+  logger.info(`Marked message as deleted: ${itemId}, timestamp: ${event.deleted_ts}`);
 }
 
