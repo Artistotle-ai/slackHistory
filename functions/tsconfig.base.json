@@ -1,9 +1,14 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "commonjs",
-    "lib": ["ESNext"],
-    "moduleResolution": "node",
+    // Use node20 module mode for stable Node.js 20+ behavior
+    // This provides consistent, predictable interop between CommonJS and ESM modules
+    // Unlike nodenext which evolves, node20 implies a fixed --target es2023
+    "target": "ES2023",
+    "module": "node20",
+    "lib": ["ES2023"],
+    // Use nodenext for moduleResolution with node20 module mode
+    // This provides Node.js 20+ module resolution behavior
+    "moduleResolution": "nodenext",
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
