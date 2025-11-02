@@ -1,0 +1,27 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - n 20
+      - node --version
+      - npm --version
+      - npm install
+
+  pre_build:
+    commands:
+      - cd functions/slack-shared && npm ci || npm install && cd ../..
+
+  build:
+    commands:
+      - npm run build:layer
+
+artifacts:
+  files:
+    - 'shared-node-modules.zip'
+    - 'shared-node-modules.tar.gz'
+    - 'layer-arn.env'
+    - 'merged-deps/package.json'
+  name: LayerArtifact

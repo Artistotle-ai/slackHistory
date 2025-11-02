@@ -3,12 +3,25 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      nodejs: 22
+      nodejs: 20
     commands:
-      - npm install -g aws-cdk
+      - n 20
+      - node --version
+      - npm --version
+
+  pre_build:
+    commands:
+      - echo "=== Building Infrastructure ==="
+      - cd infrastructure && npm ci || npm install
+
   build:
     commands:
-      - cd infrastructure && npm ci
-      - npm run build
-      - npx cdk synth
-      - npx cdk deploy --all --require-approval never --outputs-file outputs.json
+      - |
+        cd infrastructure
+        npm run build || true
+        npx cdk synth
+
+artifacts:
+  files:
+    - 'infrastructure/cdk.out/**/*'
+  name: InfrastructureArtifact

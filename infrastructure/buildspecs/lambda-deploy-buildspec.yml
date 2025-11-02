@@ -1,0 +1,57 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - aws --version
+      - echo "=== Deploying Lambda function: ${FUNCTION_NAME} ==="
+
+  build:
+    commands:
+      - |
+        APP_PREFIX="${APP_PREFIX:-Mnemosyne}"
+        FUNCTION_ZIP="${FUNCTION_NAME}-function.zip"
+        FULL_FUNCTION_NAME="${APP_PREFIX}${FUNCTION_NAME}"
+        echo "Function: ${FULL_FUNCTION_NAME}"
+        echo "Package: ${FUNCTION_ZIP}"
+      # Get layer ARN from layer build artifact
+      - |
+        # Layer ARN is in LayerBuildArtifact/layer-arn.env
+        if [ -f "LayerBuildArtifact/layer-arn.env" ]; then
+          source LayerBuildArtifact/layer-arn.env
+          echo "Using layer ARN from artifact: ${LAYER_ARN}"
+        elif [ -f "layer-arn.env" ]; then
+          source layer-arn.env
+          echo "Using layer ARN from artifact: ${LAYER_ARN}"
+        else
+          # Fallback: get latest layer version
+          LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
+          echo "Layer ARN artifact not found, fetching latest version..."
+          LAYER_ARN_OUTPUT=$(aws lambda list-layer-versions \
+            --layer-name "${LAYER_NAME}" \
+            --max-items 1 \
+            --query 'LayerVersions[0].LayerVersionArn' \
+            --output text 2>&1)
+          if [ $? -eq 0 ] && [[ "$LAYER_ARN_OUTPUT" =~ ^arn:aws: ]]; then
+            LAYER_ARN="$LAYER_ARN_OUTPUT"
+            echo "Using latest layer version: ${LAYER_ARN}"
+          else
+            echo "ERROR: Failed to get layer ARN"
+            exit 1
+          fi
+        fi
+      # Deploy Lambda function
+      - |
+        if [ ! -f "$FUNCTION_ZIP" ]; then
+          echo "ERROR: ${FUNCTION_ZIP} not found!"
+          exit 1
+        fi
+        echo "Updating function code..."
+        aws lambda update-function-code \
+          --function-name "$FULL_FUNCTION_NAME" \
+          --zip-file "fileb://${FUNCTION_ZIP}"
+        echo "Updating function configuration with layer..."
+        aws lambda update-function-configuration \
+          --function-name "$FULL_FUNCTION_NAME" \
+          --layers "$LAYER_ARN"
+        echo "✓ ${FULL_FUNCTION_NAME} deployed with layer ${LAYER_ARN}"
