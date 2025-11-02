@@ -10,6 +10,7 @@ phases:
         if [ -d "functions/slack-shared" ]; then
           cd functions/slack-shared
           npm ci
+          npm run build
           cd ../..
         else
           echo "WARNING: functions/slack-shared directory not found, skipping..."
@@ -26,15 +27,6 @@ phases:
         fi
   build:
     commands:
-      - echo "Building slack-shared dependency..."
-      - |
-        if [ -d "functions/slack-shared" ]; then
-          cd functions/slack-shared
-          npm run build
-          cd ../..
-        else
-          echo "WARNING: functions/slack-shared directory not found, skipping build..."
-        fi
       - echo "Building message-listener Lambda function..."
       - |
         if [ -d "functions/message-listener" ]; then

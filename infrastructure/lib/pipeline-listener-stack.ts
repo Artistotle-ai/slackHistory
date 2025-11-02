@@ -80,54 +80,35 @@ export class PipelineListenerStack extends cdk.Stack {
     }));
 
     // Single CodeBuild project for Lambda build and deploy
-    // Using CfnProject directly to specify Lambda compute with ARM image
-    // Changed logical ID to force replacement of old PipelineProject-based resource
-    // Proactive log group with 7-day retention
-    const listenerBuildLogGroup = new logs.LogGroup(this, 'ListenerBuildLogs', {
-      logGroupName: `/aws/codebuild/${appPrefix}MessageListenerBuildDeployV3`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    const lambdaBuildDeployProject = new codebuild.CfnProject(this, 'LambdaBuildDeployProjectV3', {
-      name: `${appPrefix}MessageListenerBuildDeployV3`,
-      artifacts: {
-        type: 'CODEPIPELINE',
-      },
+    const project = new codebuild.PipelineProject(this, 'MessageListenerBuildDeployProject', {
+      projectName: `${appPrefix}MessageListenerBuildDeploy`,
       environment: {
-        type: 'ARM_LAMBDA_CONTAINER',
-        computeType: 'BUILD_LAMBDA_1GB',
-        image: 'aws/codebuild/amazonlinux-aarch64-lambda-standard:nodejs22',
-        imagePullCredentialsType: 'CODEBUILD',
-        environmentVariables: [
-          {
-            name: 'ARTIFACT_BUCKET',
-            value: artifactBucket.bucketName,
-          },
-          {
-            name: 'FUNCTION_NAME',
-            value: `${appPrefix}MessageListener`,
-          },
-        ],
+        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
+        privileged: false,
       },
-      logsConfig: {
-        cloudWatchLogs: {
-          status: 'ENABLED',
-          groupName: listenerBuildLogGroup.logGroupName,
+      cache: codebuild.Cache.bucket(artifactBucket, {
+        prefix: 'codebuild-cache-message-listener',
+      }),
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/message-listener-buildspec.yml'),
+      role: codeBuildRole,
+      logging: {
+        cloudWatch: {
+          logGroup: new logs.LogGroup(this, 'MessageListenerBuildLogs', {
+            logGroupName: `/aws/codebuild/${appPrefix}MessageListenerBuildDeploy`,
+            retention: logs.RetentionDays.ONE_WEEK,
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+          }),
         },
       },
-      source: {
-        type: 'CODEPIPELINE',
-        buildSpec: (() => {
-          const buildSpec = codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/message-listener-buildspec.yml');
-          return buildSpec.toBuildSpec();
-        })(),
+      environmentVariables: {
+        ARTIFACT_BUCKET: {
+          value: artifactBucket.bucketName,
+        },
+        FUNCTION_NAME: {
+          value: `${appPrefix}MessageListener`,
+        },
       },
-      serviceRole: codeBuildRole.roleArn,
     });
-
-    // Create a Project wrapper for use in CodePipeline
-    const project = codebuild.Project.fromProjectName(this, 'LambdaBuildDeployProjectWrapper', lambdaBuildDeployProject.ref);
 
     // CodePipeline for message-listener deployment
     const pipeline = new codepipeline.Pipeline(this, 'ListenerPipeline', {
@@ -155,7 +136,7 @@ export class PipelineListenerStack extends cdk.Stack {
 
     // Build and Deploy stage (combined)
     const buildDeployAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'Lambda_Build_Deploy_V3',
+      actionName: 'Lambda_Build_Deploy',
       project: project,
       input: sourceOutput,
     });

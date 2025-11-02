@@ -80,54 +80,35 @@ export class PipelineOAuthCallbackStack extends cdk.Stack {
     }));
 
     // Single CodeBuild project for Lambda build and deploy
-    // Using CfnProject directly to specify Lambda compute with ARM image
-    // Changed logical ID to force replacement of old PipelineProject-based resource
-    // Proactive log group with 7-day retention
-    const oauthCallbackBuildLogGroup = new logs.LogGroup(this, 'OAuthCallbackBuildLogs', {
-      logGroupName: `/aws/codebuild/${appPrefix}OAuthCallbackBuildDeploy`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    const lambdaBuildDeployProject = new codebuild.CfnProject(this, 'LambdaBuildDeployProject', {
-      name: `${appPrefix}OAuthCallbackBuildDeploy`,
-      artifacts: {
-        type: 'CODEPIPELINE',
-      },
+    const project = new codebuild.PipelineProject(this, 'OAuthCallbackBuildDeployProject', {
+      projectName: `${appPrefix}OAuthCallbackBuildDeploy`,
       environment: {
-        type: 'ARM_LAMBDA_CONTAINER',
-        computeType: 'BUILD_LAMBDA_1GB',
-        image: 'aws/codebuild/amazonlinux-aarch64-lambda-standard:nodejs22',
-        imagePullCredentialsType: 'CODEBUILD',
-        environmentVariables: [
-          {
-            name: 'ARTIFACT_BUCKET',
-            value: artifactBucket.bucketName,
-          },
-          {
-            name: 'FUNCTION_NAME',
-            value: `${appPrefix}OAuthCallback`,
-          },
-        ],
+        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
+        privileged: false,
       },
-      logsConfig: {
-        cloudWatchLogs: {
-          status: 'ENABLED',
-          groupName: oauthCallbackBuildLogGroup.logGroupName,
+      cache: codebuild.Cache.bucket(artifactBucket, {
+        prefix: 'codebuild-cache-oauth-callback',
+      }),
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/oauth-callback-buildspec.yml'),
+      role: codeBuildRole,
+      logging: {
+        cloudWatch: {
+          logGroup: new logs.LogGroup(this, 'OAuthCallbackBuildLogs', {
+            logGroupName: `/aws/codebuild/${appPrefix}OAuthCallbackBuildDeploy`,
+            retention: logs.RetentionDays.ONE_WEEK,
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+          }),
         },
       },
-      source: {
-        type: 'CODEPIPELINE',
-        buildSpec: (() => {
-          const buildSpec = codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/oauth-callback-buildspec.yml');
-          return buildSpec.toBuildSpec();
-        })(),
+      environmentVariables: {
+        ARTIFACT_BUCKET: {
+          value: artifactBucket.bucketName,
+        },
+        FUNCTION_NAME: {
+          value: `${appPrefix}OAuthCallback`,
+        },
       },
-      serviceRole: codeBuildRole.roleArn,
     });
-
-    // Create a Project wrapper for use in CodePipeline
-    const project = codebuild.Project.fromProjectName(this, 'LambdaBuildDeployProjectWrapper', lambdaBuildDeployProject.ref);
 
     // CodePipeline for oauth-callback deployment
     const pipeline = new codepipeline.Pipeline(this, 'OAuthCallbackPipeline', {

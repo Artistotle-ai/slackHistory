@@ -42,6 +42,9 @@ Receives Slack Events API webhooks, validates signatures, routes events to handl
 - `channel_purpose` / `channel_topic` - Purpose/topic update
 - `channel_convert_to_private` / `channel_convert_to_public` - Visibility change
 
+**Other Events:**
+- `file_shared` - File upload notification (logged only; files captured via `message.files`)
+
 See [Data Model](../requirements/requirements.md) for DynamoDB schema.
 
 ## Permissions
