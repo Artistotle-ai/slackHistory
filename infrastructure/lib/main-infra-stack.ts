@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import * as path from 'path';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -163,9 +164,10 @@ export class MainInfraStack extends cdk.Stack {
     // Layer will be published by pipeline, but we create the layer resource here
     // so it can be referenced and attached to Lambda functions
     // Pipeline will publish new versions, but the layer name stays the same
+    // Use placeholder directory structure (pipeline will publish actual versions)
     const slackSharedLayer = new lambda.LayerVersion(this, 'SlackSharedLayer', {
       layerVersionName: `${appPrefix}SlackSharedLayer`,
-      code: lambda.Code.fromInline('// Placeholder - actual layer published by pipeline'),
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'layer-placeholder')), // Minimal placeholder directory (nodejs/ structure)
       compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
       compatibleArchitectures: [lambda.Architecture.ARM_64],
       description: 'Shared utilities and types for Mnemosyne Slack functions - managed by pipeline',

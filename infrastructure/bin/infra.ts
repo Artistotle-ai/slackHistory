@@ -9,8 +9,11 @@ import { PipelineLambdasStack } from '../lib/pipeline-lambdas-stack';
 const app = new cdk.App();
 
 // Environment configuration
+// Allow region to be configured via environment variable (default: eu-west-1)
+// Example: AWS_REGION=us-east-1 npx cdk deploy --all
+const region = process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'eu-west-1';
 const env = {
-  region: 'eu-west-1',
+  region,
   account: process.env.CDK_DEFAULT_ACCOUNT,
 };
 
