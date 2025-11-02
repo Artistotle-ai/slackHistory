@@ -17,8 +17,33 @@ import {
   logger,
 } from "mnemosyne-slack-shared";
 import { getMessageChannelId } from "mnemosyne-slack-shared";
-import * as messageHandlers from "./handlers/message-handlers";
-import * as channelHandlers from "./handlers/channel-handlers";
+
+// Lazy load handlers using dynamic imports for better cold start performance
+// Handlers are only loaded when needed, reducing Lambda initialization time
+let messageHandlersPromise: Promise<typeof import("./handlers/message-handlers")> | null = null;
+let channelHandlersPromise: Promise<typeof import("./handlers/channel-handlers")> | null = null;
+
+/**
+ * Lazy load message handlers (only when processing message events)
+ * Uses dynamic import to defer module loading until actually needed
+ */
+async function getMessageHandlers() {
+  if (!messageHandlersPromise) {
+    messageHandlersPromise = import("./handlers/message-handlers");
+  }
+  return messageHandlersPromise;
+}
+
+/**
+ * Lazy load channel handlers (only when processing channel events)
+ * Uses dynamic import to defer module loading until actually needed
+ */
+async function getChannelHandlers() {
+  if (!channelHandlersPromise) {
+    channelHandlersPromise = import("./handlers/channel-handlers");
+  }
+  return channelHandlersPromise;
+}
 
 /**
  * Route event to appropriate handler using discriminated union narrowing
@@ -61,6 +86,9 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
 
       // Route to specific handler based on message subtype
       // Check subtypes in order: changed -> deleted -> new message (default)
+      // Lazy load message handlers only when processing message events
+      const messageHandlers = await getMessageHandlers();
+      
       if ("subtype" in messageEvent && messageEvent.subtype === "message_changed" && "message" in messageEvent) {
         // Message was edited - update existing message in DynamoDB
         await messageHandlers.handleMessageChanged(messageEvent as MessageChangedEvent, teamId, channelId);
@@ -77,11 +105,13 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
 
   // Handle channel events - TypeScript exhaustively narrows based on discriminated union
   // All known channel event types are handled explicitly
+  // Lazy load channel handlers only when processing channel events
   if (event.type !== "unknown") {
     switch (event.type) {
       case "channel_created": {
         const channelEvent = event as ChannelCreatedEvent;
         if ("channel" in channelEvent && typeof channelEvent.channel === "object" && "id" in channelEvent.channel) {
+          const channelHandlers = await getChannelHandlers();
           await channelHandlers.handleChannelCreated(channelEvent, teamId);
         }
         return;
@@ -90,6 +120,7 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
       case "channel_rename": {
         const channelEvent = event as ChannelRenameEvent;
         if ("channel" in channelEvent && typeof channelEvent.channel === "object" && "id" in channelEvent.channel) {
+          const channelHandlers = await getChannelHandlers();
           await channelHandlers.handleChannelRename(channelEvent, teamId);
         }
         return;
@@ -99,6 +130,7 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
         const channelEvent = event as ChannelDeletedEvent;
         const channelId = typeof channelEvent.channel === "string" ? channelEvent.channel : undefined;
         if (channelId) {
+          const channelHandlers = await getChannelHandlers();
           await channelHandlers.handleChannelDeleted(channelEvent, teamId, channelId);
         }
         return;
@@ -108,6 +140,7 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
         const channelEvent = event as ChannelArchiveEvent;
         const channelId = typeof channelEvent.channel === "string" ? channelEvent.channel : undefined;
         if (channelId && "user" in channelEvent) {
+          const channelHandlers = await getChannelHandlers();
           await channelHandlers.handleChannelArchive(channelEvent, teamId, channelId);
         }
         return;
@@ -117,6 +150,7 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
         const channelEvent = event as ChannelUnarchiveEvent;
         const channelId = typeof channelEvent.channel === "string" ? channelEvent.channel : undefined;
         if (channelId && "user" in channelEvent) {
+          const channelHandlers = await getChannelHandlers();
           await channelHandlers.handleChannelUnarchive(channelEvent, teamId, channelId);
         }
         return;
@@ -126,6 +160,7 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
         const channelEvent = event as ChannelIdChangedEvent;
         const channelId = typeof channelEvent.channel === "string" ? channelEvent.channel : undefined;
         if (channelId) {
+          const channelHandlers = await getChannelHandlers();
           const oldChannelId = channelEvent.previous_channel || channelId;
           await channelHandlers.handleChannelIdChanged(channelEvent, teamId, oldChannelId, channelId);
         }
@@ -136,6 +171,7 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
         const channelEvent = event as ChannelPurposeEvent;
         const channelId = typeof channelEvent.channel === "string" ? channelEvent.channel : undefined;
         if (channelId) {
+          const channelHandlers = await getChannelHandlers();
           await channelHandlers.handleChannelPurposeOrTopic(channelEvent, teamId, channelId, "purpose");
         }
         return;
@@ -145,6 +181,7 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
         const channelEvent = event as ChannelTopicEvent;
         const channelId = typeof channelEvent.channel === "string" ? channelEvent.channel : undefined;
         if (channelId) {
+          const channelHandlers = await getChannelHandlers();
           await channelHandlers.handleChannelPurposeOrTopic(channelEvent, teamId, channelId, "topic");
         }
         return;
@@ -154,6 +191,7 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
         const channelEvent = event as ChannelConvertToPrivateEvent;
         const channelId = typeof channelEvent.channel === "string" ? channelEvent.channel : undefined;
         if (channelId) {
+          const channelHandlers = await getChannelHandlers();
           await channelHandlers.handleChannelVisibilityChange(channelEvent, teamId, channelId, "private");
         }
         return;
@@ -163,6 +201,7 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
         const channelEvent = event as ChannelConvertToPublicEvent;
         const channelId = typeof channelEvent.channel === "string" ? channelEvent.channel : undefined;
         if (channelId) {
+          const channelHandlers = await getChannelHandlers();
           await channelHandlers.handleChannelVisibilityChange(channelEvent, teamId, channelId, "public");
         }
         return;
