@@ -13,7 +13,7 @@ phases:
       - rm -rf *.js *.d.ts *.map *.tsbuildinf
       - npm install
       - npm run build
-      - npx cdk synth --quiet
+      - npx cdk synth
       - npx cdk deploy --all --require-approval never --outputs-file outputs.json
 cache:
   key: infra-$(codebuild-hash-files infrastructure/package-lock.json infrastructure/package.json)
