@@ -82,6 +82,17 @@ export class PipelineInfraStack extends cdk.Stack {
       resources: ['*'], // TODO: Restrict to specific resources for security
     }));
 
+    // Add permission to assume CDK file publishing role for asset publishing
+    codeBuildRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['sts:AssumeRole'],
+      resources: [
+        `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/cdk-hnb659fds-file-publishing-role-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+        `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/cdk-hnb659fds-deploy-role-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+        `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/cdk-hnb659fds-lookup-role-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      ],
+    }));
+
     // Allow writing build logs to CloudWatch Logs
     codeBuildRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
