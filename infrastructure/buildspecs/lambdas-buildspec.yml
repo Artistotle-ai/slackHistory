@@ -12,7 +12,7 @@ phases:
         echo "Current Node.js version: $(node --version 2>/dev/null || echo 'not installed')"
         echo "Installing/upgrading to Node.js 20 via NodeSource..."
         curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-        sudo yum install -y nodejs --disablerepo=* --enablerepo=nodesource
+        sudo yum install -y nodejs
       - node --version
       - npm --version
       - echo Building slack-shared dependency
