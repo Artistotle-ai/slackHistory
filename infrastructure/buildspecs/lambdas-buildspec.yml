@@ -3,12 +3,12 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - echo "Installing Node.js 22 (fnm - Fast Node Manager)..."
+      - echo "Installing Node.js 20 (fnm - Fast Node Manager)..."
       - curl -fsSL https://fnm.vercel.app/install | bash
       - export PATH="/root/.local/share/fnm:$PATH"
       - eval "`fnm env`"
-      - fnm install 22
-      - fnm use 22
+      - fnm install 20
+      - fnm use 20
       - node --version
       - npm --version
   install:
