@@ -10,11 +10,13 @@ const app = new cdk.App();
 
 // Environment configuration
 // Allow region to be configured via environment variable (default: eu-west-1)
-// Example: AWS_REGION=us-east-1 npx cdk deploy --all
+// Allow account to be configured via environment variable
+// Example: AWS_REGION=us-east-1 AWS_ACCOUNT_ID=123456789012 npx cdk deploy --all
 const region = process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'eu-west-1';
+const account = process.env.AWS_ACCOUNT_ID || process.env.CDK_DEFAULT_ACCOUNT || process.env.CDK_DEPLOY_ACCOUNT;
 const env = {
   region,
-  account: process.env.CDK_DEFAULT_ACCOUNT,
+  account,
 };
 
 // TODO: Define specific resource names and configurations
