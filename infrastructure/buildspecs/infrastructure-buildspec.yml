@@ -14,7 +14,13 @@ phases:
     commands:
       - echo "=== Checking for infrastructure changes ==="
       - BUILD_TYPE=infrastructure node infrastructure/scripts/check-changes.js
-      - . build-changes.env
+      - |
+        if [ -f build-changes.env ]; then
+          . build-changes.env
+        else
+          echo "WARNING: build-changes.env not found, defaulting to HAS_CHANGES=true"
+          export HAS_CHANGES=true
+        fi
       - echo "HAS_CHANGES=${HAS_CHANGES}"
       - |
         if [ "${HAS_CHANGES}" = "false" ]; then

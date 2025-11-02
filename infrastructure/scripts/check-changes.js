@@ -149,8 +149,15 @@ function main() {
   
   // Write to file for buildspec to source
   const envFile = path.join(PROJECT_ROOT, 'build-changes.env');
-  fs.writeFileSync(envFile, `HAS_CHANGES=${hasChangesValue}\n`);
-  console.log(`✓ Hash check complete - HAS_CHANGES=${hasChangesValue}`);
+  try {
+    fs.writeFileSync(envFile, `HAS_CHANGES=${hasChangesValue}\n`);
+    console.log(`✓ Hash check complete - HAS_CHANGES=${hasChangesValue}`);
+    console.log(`✓ Environment file written to: ${envFile}`);
+  } catch (error) {
+    console.error(`ERROR: Failed to write ${envFile}:`, error.message);
+    // Don't fail the script - just output the value so it can be captured
+    process.stdout.write(`HAS_CHANGES=${hasChangesValue}\n`);
+  }
   
   // Always exit 0 - never fail, just set variable
   process.exit(0);
