@@ -35,6 +35,13 @@ phases:
         fi
       - npm run build:layer
 
+cache:
+  key: layer-$(codebuild-hash-files package-lock.json package.json functions/slack-shared/package.json merged-deps/package.json)
+  paths:
+    - 'node_modules/**/*'
+    - 'functions/slack-shared/node_modules/**/*'
+    - 'merged-deps/node_modules/**/*'
+
 artifacts:
   files:
     - 'shared-node-modules.zip'
