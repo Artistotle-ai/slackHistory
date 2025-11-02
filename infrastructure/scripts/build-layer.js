@@ -46,8 +46,30 @@ async function buildLayer() {
     ).filter(p => fs.existsSync(p))
   ];
   
-  // Use package-json-merge utility
-  run(`npx package-json-merge ${pkgPaths.join(' ')} > ${mergedDepsDir}/package.json`);
+  // Use merge-package-json library
+  const mergePackageJson = require('merge-package-json');
+  
+  // Read and parse all package.json files
+  const packages = pkgPaths.map(pkgPath => {
+    const content = fs.readFileSync(pkgPath, 'utf8');
+    return JSON.parse(content);
+  });
+  
+  // Merge all packages sequentially
+  let mergedPkg = packages[0] || {};
+  for (let i = 1; i < packages.length; i++) {
+    mergedPkg = mergePackageJson(mergedPkg, packages[i]);
+  }
+  
+  // Ensure we have name and version
+  mergedPkg.name = mergedPkg.name || 'mnemosyne-merged-dependencies';
+  mergedPkg.version = mergedPkg.version || '1.0.0';
+  
+  // Write merged package.json
+  fs.writeFileSync(
+    path.join(mergedDepsDir, 'package.json'),
+    JSON.stringify(mergedPkg, null, 2) + '\n'
+  );
   console.log('✓ Dependencies merged');
   
   // Step 3: Install merged dependencies
