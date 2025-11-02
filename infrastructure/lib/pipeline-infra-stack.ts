@@ -98,44 +98,27 @@ export class PipelineInfraStack extends cdk.Stack {
     }));
 
     // Single CodeBuild project for CDK build and deploy
-    // Using CfnProject directly to specify Lambda compute with ARM image
-    // Lambda compute requires direct CloudFormation properties, not CDK high-level constructs
-    // Using V3 suffix to force replacement of old PipelineProject-based resource
-    const buildSpec = codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/infrastructure-buildspec.yml');
-    
-    // Proactive log group with 7-day retention
-    const cdkBuildLogGroup = new logs.LogGroup(this, 'CdkBuildLogs', {
-      logGroupName: `/aws/codebuild/${appPrefix}CdkBuildDeployV3`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    const cdkBuildDeployProject = new codebuild.CfnProject(this, 'CdkBuildDeployProjectV3', {
-      name: `${appPrefix}CdkBuildDeployV3`,
-      artifacts: {
-        type: 'CODEPIPELINE',
-      },
+    const project = new codebuild.PipelineProject(this, 'CdkBuildDeployProject', {
+      projectName: `${appPrefix}CdkBuildDeploy`,
       environment: {
-        type: 'ARM_LAMBDA_CONTAINER',
-        computeType: 'BUILD_LAMBDA_2GB',
-        image: 'aws/codebuild/amazonlinux-aarch64-lambda-standard:nodejs22',
-        imagePullCredentialsType: 'CODEBUILD',
+        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
+        privileged: false,
       },
-      logsConfig: {
-        cloudWatchLogs: {
-          status: 'ENABLED',
-          groupName: cdkBuildLogGroup.logGroupName,
+      cache: codebuild.Cache.bucket(artifactBucket, {
+        prefix: 'codebuild-cache',
+      }),
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/infrastructure-buildspec.yml'),
+      role: codeBuildRole,
+      logging: {
+        cloudWatch: {
+          logGroup: new logs.LogGroup(this, 'CdkBuildLogs', {
+            logGroupName: `/aws/codebuild/${appPrefix}CdkBuildDeploy`,
+            retention: logs.RetentionDays.ONE_WEEK,
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+          }),
         },
       },
-      source: {
-        type: 'CODEPIPELINE',
-        buildSpec: buildSpec.toBuildSpec(),
-      },
-      serviceRole: codeBuildRole.roleArn,
     });
-
-    // Create a Project wrapper for use in CodePipeline
-    const project = codebuild.Project.fromProjectName(this, 'CdkBuildDeployProject', cdkBuildDeployProject.ref);
 
     // CodePipeline for infrastructure deployment
     const pipeline = new codepipeline.Pipeline(this, 'InfraPipeline', {
@@ -162,9 +145,8 @@ export class PipelineInfraStack extends cdk.Stack {
     });
 
     // Build and Deploy stage (combined)
-    // Action name changed to force pipeline update with new CodeBuild project
     const buildDeployAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'CDK_Build_Deploy_V3',
+      actionName: 'CDK_Build_Deploy',
       project: project,
       input: sourceOutput,
     });

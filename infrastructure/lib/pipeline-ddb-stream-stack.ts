@@ -76,50 +76,32 @@ export class PipelineDdbStreamStack extends cdk.Stack {
     }));
 
     // Single CodeBuild project for Lambda build and deploy
-    // Using CfnProject directly to specify Lambda compute with ARM image
-    // Changed logical ID to force replacement of old PipelineProject-based resource
-    // Proactive log group with 7-day retention
-    const fileProcessorBuildLogGroup = new logs.LogGroup(this, 'FileProcessorBuildLogs', {
-      logGroupName: `/aws/codebuild/${appPrefix}FileProcessorBuildDeployV3`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    const lambdaBuildDeployProject = new codebuild.CfnProject(this, 'LambdaBuildDeployProjectV3', {
-      name: `${appPrefix}FileProcessorBuildDeployV3`,
-      artifacts: {
-        type: 'CODEPIPELINE',
-      },
+    const project = new codebuild.PipelineProject(this, 'FileProcessorBuildDeployProject', {
+      projectName: `${appPrefix}FileProcessorBuildDeploy`,
       environment: {
-        type: 'ARM_LAMBDA_CONTAINER',
-        computeType: 'BUILD_LAMBDA_1GB',
-        image: 'aws/codebuild/amazonlinux-aarch64-lambda-standard:nodejs22',
-        imagePullCredentialsType: 'CODEBUILD',
-        environmentVariables: [
-          {
-            name: 'ARTIFACT_BUCKET',
-            value: artifactBucket.bucketName,
-          },
-        ],
+        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
+        privileged: false,
       },
-      logsConfig: {
-        cloudWatchLogs: {
-          status: 'ENABLED',
-          groupName: fileProcessorBuildLogGroup.logGroupName,
+      cache: codebuild.Cache.bucket(artifactBucket, {
+        prefix: 'codebuild-cache-file-processor',
+      }),
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/file-processor-buildspec.yml'),
+      role: codeBuildRole,
+      logging: {
+        cloudWatch: {
+          logGroup: new logs.LogGroup(this, 'FileProcessorBuildLogs', {
+            logGroupName: `/aws/codebuild/${appPrefix}FileProcessorBuildDeploy`,
+            retention: logs.RetentionDays.ONE_WEEK,
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+          }),
         },
       },
-      source: {
-        type: 'CODEPIPELINE',
-        buildSpec: (() => {
-          const buildSpec = codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/file-processor-buildspec.yml');
-          return buildSpec.toBuildSpec();
-        })(),
+      environmentVariables: {
+        ARTIFACT_BUCKET: {
+          value: artifactBucket.bucketName,
+        },
       },
-      serviceRole: codeBuildRole.roleArn,
     });
-
-    // Create a Project wrapper for use in CodePipeline
-    const project = codebuild.Project.fromProjectName(this, 'LambdaBuildDeployProjectWrapper', lambdaBuildDeployProject.ref);
 
     // CodePipeline for file-processor deployment
     const pipeline = new codepipeline.Pipeline(this, 'DdbStreamPipeline', {
@@ -147,7 +129,7 @@ export class PipelineDdbStreamStack extends cdk.Stack {
 
     // Build and Deploy stage (combined)
     const buildDeployAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'Lambda_Build_Deploy_V3',
+      actionName: 'Lambda_Build_Deploy',
       project: project,
       input: sourceOutput,
     });

@@ -5,8 +5,6 @@ phases:
     runtime-versions:
       nodejs: 22
     commands:
-      - echo "Setting npm maxsockets to reduce file descriptor issues..."
-      - npm config set maxsockets 10
       - echo "Installing dependencies for slack-shared..."
       - |
         if [ -d "functions/slack-shared" ]; then
