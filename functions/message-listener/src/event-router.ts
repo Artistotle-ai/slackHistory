@@ -29,7 +29,7 @@ let channelHandlersPromise: Promise<typeof import("./handlers/channel-handlers")
  */
 async function getMessageHandlers() {
   if (!messageHandlersPromise) {
-    messageHandlersPromise = import("./handlers/message-handlers");
+    messageHandlersPromise = import("./handlers/message-handlers.js");
   }
   return messageHandlersPromise;
 }
@@ -40,7 +40,7 @@ async function getMessageHandlers() {
  */
 async function getChannelHandlers() {
   if (!channelHandlersPromise) {
-    channelHandlersPromise = import("./handlers/channel-handlers");
+    channelHandlersPromise = import("./handlers/channel-handlers.js");
   }
   return channelHandlersPromise;
 }
