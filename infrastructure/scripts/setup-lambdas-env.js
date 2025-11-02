@@ -41,7 +41,43 @@ function setupLambdasEnv() {
   console.log(`\nFound ${artifactEnvVars.length} artifact environment variables:`);
   artifactEnvVars.forEach(({ name, path: envPath }) => {
     console.log(`  ${name}=${envPath}`);
+    // Check if the directory exists and list its contents
+    if (envPath && fs.existsSync(envPath)) {
+      try {
+        const entries = fs.readdirSync(envPath, { withFileTypes: true });
+        console.log(`    Contents of ${envPath}:`);
+        entries.forEach(entry => {
+          console.log(`      ${entry.isDirectory() ? 'DIR' : 'FILE'}: ${entry.name}`);
+        });
+      } catch (e) {
+        console.log(`    Could not list ${envPath}: ${e.message}`);
+      }
+    }
   });
+  
+  // Also check CODEBUILD_SRC_DIR itself for subdirectories
+  console.log(`\nChecking CODEBUILD_SRC_DIR (${codebuildSrcDir}) for artifact subdirectories:`);
+  try {
+    const srcEntries = fs.readdirSync(codebuildSrcDir, { withFileTypes: true });
+    srcEntries.forEach(entry => {
+      const fullPath = path.join(codebuildSrcDir, entry.name);
+      console.log(`  ${entry.isDirectory() ? 'DIR' : 'FILE'}: ${entry.name}`);
+      // If it's a directory that might contain artifacts, check it
+      if (entry.isDirectory() && (entry.name.includes('Layer') || entry.name.includes('Artifact'))) {
+        try {
+          const subEntries = fs.readdirSync(fullPath, { withFileTypes: true });
+          console.log(`    Contents:`);
+          subEntries.forEach(subEntry => {
+            console.log(`      ${subEntry.isDirectory() ? 'DIR' : 'FILE'}: ${subEntry.name}`);
+          });
+        } catch (e) {
+          // Ignore
+        }
+      }
+    });
+  } catch (e) {
+    console.log(`  Could not list ${codebuildSrcDir}: ${e.message}`);
+  }
   
   // Build list of possible artifact directories
   const possibleArtifactDirs = [];
