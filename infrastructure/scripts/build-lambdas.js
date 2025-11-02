@@ -308,21 +308,22 @@ function buildLambdas() {
         console.error('ERROR: Extracted node_modules not found!');
         process.exit(1);
       }
-    
-    console.log('✓ Merged node_modules extracted');
-    
-    // Copy to each Lambda function
-    console.log('\nCopying merged node_modules to each Lambda...');
-    for (const func of FUNCTIONS) {
-      const funcDir = path.join(PROJECT_ROOT, `functions/${func}`);
-      if (fs.existsSync(funcDir)) {
-        console.log(`Copying to ${func}...`);
-        const funcNodeModules = path.join(funcDir, 'node_modules');
-        if (fs.existsSync(funcNodeModules)) {
-          run(`rm -rf ${funcNodeModules}`);
+      
+      console.log('✓ Merged node_modules extracted');
+      
+      // Copy to each Lambda function
+      console.log('\nCopying merged node_modules to each Lambda...');
+      for (const func of FUNCTIONS) {
+        const funcDir = path.join(PROJECT_ROOT, `functions/${func}`);
+        if (fs.existsSync(funcDir)) {
+          console.log(`Copying to ${func}...`);
+          const funcNodeModules = path.join(funcDir, 'node_modules');
+          if (fs.existsSync(funcNodeModules)) {
+            run(`rm -rf ${funcNodeModules}`);
+          }
+          run(`cp -r ${tmpDir}/node_modules ${funcNodeModules}`);
+          console.log(`✓ ${func}: All dependencies ready`);
         }
-        run(`cp -r ${tmpDir}/node_modules ${funcNodeModules}`);
-        console.log(`✓ ${func}: All dependencies ready`);
       }
     }
   } else {
