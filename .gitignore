@@ -76,6 +76,13 @@ cdk.out/
 !infrastructure/scripts/*.js
 !infrastructure/layer-placeholder/**/*.js
 
+# Build outputs
+**/dist/
+**/build/
+**/coverage/
+infrastructure/lib/*.js
+infrastructure/bin/*.js
+
 # Environment variables
 .env
 .env.local
