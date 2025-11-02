@@ -9,8 +9,9 @@ phases:
     commands:
       - cd infrastructure
       - rm -rf node_modules
-      - rm -rf .js 
-      - npm ci
+      - rm  package-lock.json
+      - rm -rf *.js *.d.ts *.map *.tsbuildinf
+      - npm install
       - npm run build
       - npx cdk synth --quiet
       - npx cdk deploy --all --require-approval never --outputs-file outputs.json
