@@ -106,37 +106,7 @@ export class PipelineLambdasStack extends cdk.Stack {
       ],
     }));
 
-    // Infrastructure build project - builds CDK infrastructure
-    // Note: No source property - source comes from CodePipeline Action
-    const infraBuildProject = new codebuild.PipelineProject(this, 'InfrastructureBuildProject', {
-      projectName: `${appPrefix}InfrastructureBuild`,
-      environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-        computeType: codebuild.ComputeType.SMALL,
-        privileged: false,
-      },
-      cache: codebuild.Cache.bucket(artifactBucket, {
-        prefix: 'codebuild-cache-infra-build',
-      }),
-      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/infrastructure-buildspec.yml'),
-      role: codeBuildRole,
-      logging: {
-        cloudWatch: {
-          logGroup: new logs.LogGroup(this, 'InfrastructureBuildLogs', {
-            logGroupName: `/aws/codebuild/${appPrefix}InfrastructureBuild`,
-            retention: logs.RetentionDays.ONE_WEEK,
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
-          }),
-        },
-      },
-      environmentVariables: {
-        APP_PREFIX: {
-          value: appPrefix,
-        },
-      },
-    });
-
-    // Build projects - run in parallel
+    // Build projects - Layer build only (Infrastructure is deployed via separate Infrastructure pipeline)
     // 1. Layer build project
     // Note: No source property - source comes from CodePipeline Action
     const layerBuildProject = new codebuild.PipelineProject(this, 'LayerBuildProject', {
@@ -229,16 +199,8 @@ export class PipelineLambdasStack extends cdk.Stack {
       actions: [sourceAction],
     });
 
-    // Build stage 1 - Infrastructure and Layer build+deploy in parallel
-    // Layer build also deploys the layer (outputs node_modules zip + layer ARN)
-    const infraBuildOutput = new codepipeline.Artifact('InfrastructureArtifact');
-    const infraBuildAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'Infrastructure_Build',
-      project: infraBuildProject,
-      input: sourceOutput, // Use source artifact as input
-      outputs: [infraBuildOutput],
-    });
-
+    // Build stage 1 - Layer build+deploy
+    // Layer build deploys the layer (outputs node_modules zip + layer ARN)
     const layerBuildOutput = new codepipeline.Artifact('LayerBuildArtifact');
     const layerBuildAction = new codepipeline_actions.CodeBuildAction({
       actionName: 'Layer_Build_Deploy',
@@ -248,8 +210,8 @@ export class PipelineLambdasStack extends cdk.Stack {
     });
 
     pipeline.addStage({
-      stageName: 'Build',
-      actions: [infraBuildAction, layerBuildAction],
+      stageName: 'Build_Layer',
+      actions: [layerBuildAction],
     });
 
     // Build and Deploy stage - Lambdas build and deploy in same CodeBuild (just API calls)
