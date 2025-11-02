@@ -5,20 +5,49 @@ phases:
     runtime-versions:
       nodejs: 22
     commands:
+      - echo "Listing files:"
+      - ls -la
+      - echo "Checking for functions directory:"
+      - ls -la functions/ || echo "functions directory not found"
       - echo "Installing dependencies..."
-      - cd functions/file-processor && npm ci
+      - |
+        if [ -d "functions/file-processor" ]; then
+          cd functions/file-processor
+          npm ci
+          cd ../..
+        else
+          echo "ERROR: functions/file-processor directory not found!"
+          exit 1
+        fi
   build:
     commands:
       - echo "Building Lambda function..."
-      - cd functions/file-processor
+      - |
+        if [ -d "functions/file-processor" ]; then
+          cd functions/file-processor
+        else
+          echo "ERROR: functions/file-processor directory not found!"
+          exit 1
+        fi
       - npm run build
       - echo "Pruning dev dependencies..."
       - npm prune --production
       - echo "Creating zip with proper structure..."
-      - cd dist
-      - zip -r ../../../file-processor-function.zip *
-      - cd ..
-      - zip -r ../../file-processor-function.zip node_modules
+      - |
+        if [ -d "dist" ]; then
+          cd dist
+          zip -r ../../../file-processor-function.zip *
+          cd ..
+        else
+          echo "ERROR: dist directory not found after build!"
+          exit 1
+        fi
+      - |
+        if [ -d "node_modules" ]; then
+          zip -r ../../file-processor-function.zip node_modules
+        else
+          echo "WARNING: node_modules directory not found"
+        fi
       - cd ../..
       - echo "Deploying Lambda function via pipeline..."
       - |
