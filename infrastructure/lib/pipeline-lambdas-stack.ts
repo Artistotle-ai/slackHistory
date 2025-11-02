@@ -89,7 +89,7 @@ export class PipelineLambdasStack extends cdk.Stack {
     const project = new codebuild.PipelineProject(this, 'LambdasBuildDeployProject', {
       projectName: `${appPrefix}LambdasBuildDeploy`,
       environment: {
-        buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2_STANDARD_1_0,
+        buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
         computeType: codebuild.ComputeType.SMALL,
         privileged: false,
       },
