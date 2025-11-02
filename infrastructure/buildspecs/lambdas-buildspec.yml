@@ -2,10 +2,11 @@ version: 0.2
 
 phases:
   install:
-    # Install Node.js 22 using nvm (standard images don't support runtime-versions: nodejs: 22)
+    # Install Node.js 20 using nvm (Node.js 22 requires GLIBC 2.27+ which Amazon Linux 2023 doesn't have)
+    # Node.js 20 has compatible GLIBC requirements for Amazon Linux 2023
     # All commands must run in the same shell session using && to chain them
     commands:
-      - export NVM_DIR="$HOME/.nvm" && if [ ! -d "$NVM_DIR" ]; then curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash; fi && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm install 22 && nvm use 22 && node --version && npm --version
+      - export NVM_DIR="$HOME/.nvm" && if [ ! -d "$NVM_DIR" ]; then curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash; fi && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm install 20 && nvm use 20 && node --version && npm --version
       - echo Building slack-shared dependency
       - |
         if [ -d "functions/slack-shared" ]; then
