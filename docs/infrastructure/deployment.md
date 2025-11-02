@@ -33,27 +33,39 @@ npx cdk deploy --all --profile default --region eu-west-1 --require-approval nev
 
 ## Post-Deployment
 
-**1. Get Function URL:**
+**1. Get Function URLs:**
 ```bash
+# Message Listener
 aws cloudformation describe-stacks \
   --stack-name MnemosyneMainInfraStack \
   --query 'Stacks[0].Outputs[?OutputKey==`MessageListenerFunctionUrl`].OutputValue' \
+  --output text
+
+# OAuth Callback
+aws cloudformation describe-stacks \
+  --stack-name MnemosyneMainInfraStack \
+  --query 'Stacks[0].Outputs[?OutputKey==`OAuthCallbackFunctionUrl`].OutputValue' \
   --output text
 ```
 
 **2. Add Slack Secrets** ([full guide](./secrets-setup.md)):
 ```bash
 aws secretsmanager put-secret-value \
-  --secret-id Mnemosyne/slack/bot-token \
-  --secret-string "xoxb-your-token"
-
-aws secretsmanager put-secret-value \
   --secret-id Mnemosyne/slack/signing-secret \
   --secret-string "your-secret"
+
+aws secretsmanager put-secret-value \
+  --secret-id Mnemosyne/slack/client-id \
+  --secret-string "your-client-id"
+
+aws secretsmanager put-secret-value \
+  --secret-id Mnemosyne/slack/client-secret \
+  --secret-string "your-client-secret"
 ```
 
 **3. Configure Slack App:**
-- Update `slack/manifest.json`: Replace `REPLACE_WITH_FUNCTION_URL` with your actual Function URL
+- Update `slack/manifest.json`: Replace function URLs with actual values
+- Add OAuth callback URL to `redirect_urls` in app settings
 - Recreate app from manifest, or manually configure Event Subscriptions
 - Subscribe to: `message.channels`, `message.groups`, `channel_*`, `file_shared`
 
@@ -121,9 +133,7 @@ Infrastructure includes lifecycle policies to minimize costs:
 - CloudWatch logs: 7-day retention
 - DynamoDB: PITR disabled
 
-See [Cost Optimization](./cost-optimization.md) for details.
-
-**Estimated cost:** $19-22/month (scales with usage)
+Costs depend on Slack activity volume.
 
 ## Cleanup
 

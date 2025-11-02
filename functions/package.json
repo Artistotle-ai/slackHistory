@@ -1,0 +1,31 @@
+{
+  "name": "mnemosyne-functions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mnemosyne Lambda functions monorepo",
+  "scripts": {
+    "install:all": "npm install && cd slack-shared && npm install && cd ../message-listener && npm install && cd ../oauth-callback && npm install && cd ../file-processor && npm install",
+    "build:shared": "cd slack-shared && npm run build",
+    "build:listener": "cd message-listener && npm run build",
+    "build:callback": "cd oauth-callback && npm run build",
+    "build:processor": "cd file-processor && npm run build",
+    "build:all": "npm run build:shared && npm run build:listener && npm run build:callback && npm run build:processor",
+    "watch:shared": "cd slack-shared && npm run watch",
+    "watch:listener": "cd message-listener && npm run watch",
+    "watch:callback": "cd oauth-callback && npm run watch",
+    "watch:processor": "cd file-processor && npm run watch",
+    "watch:all": "concurrently -n shared,listener,callback,processor 'npm run watch:shared' 'npm run watch:listener' 'npm run watch:callback' 'npm run watch:processor'",
+    "test:all": "cd slack-shared && npm test && cd ../message-listener && npm test && cd ../oauth-callback && npm test && cd ../file-processor && npm test",
+    "clean": "find . -name 'dist' -type d ! -path '*/node_modules/*' -exec rm -rf {} + 2>/dev/null || true"
+  },
+  "workspaces": [
+    "slack-shared",
+    "message-listener",
+    "oauth-callback",
+    "file-processor"
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+

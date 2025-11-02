@@ -31,11 +31,11 @@ repo/
       pipeline-listener-stack.ts
       pipeline-ddb-stream-stack.ts
     buildspecs/
-  message-listener/
+  functions/message-listener/
     src/...
-  file-processor/
+  functions/file-processor/
     src/...
-  slack-shared/
+  functions/slack-shared/
     src/...
 ```
 
