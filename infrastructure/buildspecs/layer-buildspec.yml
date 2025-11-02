@@ -16,31 +16,13 @@ phases:
       - |
         if BUILD_TYPE=layer node infrastructure/scripts/check-changes.js; then
           echo "No changes detected - skipping layer build"
-          echo "Downloading previous layer artifacts from S3..."
-          # Download previous artifacts if they exist
-          aws s3 cp s3://${ARTIFACT_BUCKET}/layer-artifacts/shared-node-modules.zip ./shared-node-modules.zip || true
-          aws s3 cp s3://${ARTIFACT_BUCKET}/layer-artifacts/layer-arn.env ./layer-arn.env || true
-          if [ -f "shared-node-modules.zip" ] && [ -f "layer-arn.env" ]; then
-            echo "✓ Using previous layer artifacts"
-            exit 0
-          else
-            echo "WARNING: Previous artifacts not found, proceeding with build"
-          fi
-        else
-          echo "Changes detected - proceeding with build"
+          exit 0
         fi
       - cd functions/slack-shared && npm ci || npm install && cd ../..
 
   build:
     commands:
       - npm run build:layer
-      # Save artifacts to S3 for reuse if build is skipped next time
-      - |
-        if [ -f "shared-node-modules.zip" ] && [ -f "layer-arn.env" ]; then
-          echo "Saving artifacts to S3 for change detection..."
-          aws s3 cp shared-node-modules.zip s3://${ARTIFACT_BUCKET}/layer-artifacts/shared-node-modules.zip || true
-          aws s3 cp layer-arn.env s3://${ARTIFACT_BUCKET}/layer-artifacts/layer-arn.env || true
-        fi
 
 artifacts:
   files:

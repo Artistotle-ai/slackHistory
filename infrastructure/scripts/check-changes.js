@@ -64,37 +64,35 @@ function hashDirectory(dir, ignorePatterns = []) {
 function getPreviousHash(buildType) {
   const hashKey = `build-hashes/${APP_PREFIX}-${buildType}-hash.txt`;
   
-  // Try to get from S3
-  if (ARTIFACT_BUCKET) {
-    try {
-      const output = execSync(
-        `aws s3 cp s3://${ARTIFACT_BUCKET}/${hashKey} - 2>/dev/null || echo ""`,
-        { encoding: 'utf8', cwd: PROJECT_ROOT, stdio: 'pipe' }
-      ).trim();
-      return output;
-    } catch (e) {
-      // File doesn't exist yet, that's okay
-      return null;
-    }
+  if (!ARTIFACT_BUCKET) {
+    return null;
   }
   
-  return null;
+  try {
+    const output = execSync(
+      `aws s3 cp s3://${ARTIFACT_BUCKET}/${hashKey} - 2>/dev/null || echo ""`,
+      { encoding: 'utf8', cwd: PROJECT_ROOT, stdio: 'pipe' }
+    ).trim();
+    return output || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 function saveHash(buildType, hash) {
   const hashKey = `build-hashes/${APP_PREFIX}-${buildType}-hash.txt`;
   
-  // Save to S3
-  if (ARTIFACT_BUCKET) {
-    try {
-      execSync(
-        `echo "${hash}" | aws s3 cp - s3://${ARTIFACT_BUCKET}/${hashKey}`,
-        { encoding: 'utf8', cwd: PROJECT_ROOT, stdio: 'pipe' }
-      );
-      console.log(`✓ Hash saved to S3: ${hashKey}`);
-    } catch (e) {
-      console.warn(`WARNING: Failed to save hash to S3: ${e.message}`);
-    }
+  if (!ARTIFACT_BUCKET) {
+    return;
+  }
+  
+  try {
+    execSync(
+      `echo "${hash}" | aws s3 cp - s3://${ARTIFACT_BUCKET}/${hashKey}`,
+      { encoding: 'utf8', cwd: PROJECT_ROOT, stdio: 'pipe' }
+    );
+  } catch (e) {
+    // Fail silently - hash storage is optional
   }
 }
 
