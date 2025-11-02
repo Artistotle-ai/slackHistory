@@ -8,6 +8,8 @@ phases:
   build:
     commands:
       - cd infrastructure
+      - rm -rf node_modules
+      - rm -rf .js 
       - npm ci
       - npm run build
       - npx cdk synth --quiet
