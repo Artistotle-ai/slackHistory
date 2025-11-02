@@ -110,20 +110,30 @@ function buildLambdas() {
         break;
       }
       
-      // Also check for any zip or tar.gz files (in case filename is different)
+      // Also check for any zip or tar.gz files (CodePipeline may rename them)
+      // Look for files that match patterns like: build-123.zip, artifact.zip, etc.
       const allFiles = fs.readdirSync(artifactDir);
       const zipFiles = allFiles.filter(f => f.endsWith('.zip'));
       const tarFiles = allFiles.filter(f => f.endsWith('.tar.gz') || f.endsWith('.tgz'));
       
+      console.log(`  Found ${zipFiles.length} zip files, ${tarFiles.length} tar files`);
+      
+      // Prefer zip files (smaller, faster)
       if (zipFiles.length > 0) {
-        const firstZip = path.join(artifactDir, zipFiles[0]);
+        // If we have the expected name, prefer it
+        const expectedZip = zipFiles.find(f => f === 'shared-node-modules.zip');
+        const zipToUse = expectedZip || zipFiles[0];
+        const firstZip = path.join(artifactDir, zipToUse);
         foundArchive = { type: 'zip', path: firstZip };
-        console.log(`Found zip archive (alternative name) at: ${firstZip}`);
+        console.log(`Found zip archive ${zipToUse} at: ${firstZip}`);
         break;
       } else if (tarFiles.length > 0) {
-        const firstTar = path.join(artifactDir, tarFiles[0]);
+        // If we have the expected name, prefer it
+        const expectedTar = tarFiles.find(f => f === 'shared-node-modules.tar.gz');
+        const tarToUse = expectedTar || tarFiles[0];
+        const firstTar = path.join(artifactDir, tarToUse);
         foundArchive = { type: 'tar', path: firstTar };
-        console.log(`Found tar archive (alternative name) at: ${firstTar}`);
+        console.log(`Found tar archive ${tarToUse} at: ${firstTar}`);
         break;
       }
     }

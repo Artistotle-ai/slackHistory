@@ -75,6 +75,25 @@ function setupLambdasEnv() {
   
   // Check all possible artifact directories
   for (const artifactDir of possibleArtifactDirs) {
+    if (!fs.existsSync(artifactDir)) {
+      continue;
+    }
+    
+    // Debug: List all files in this directory
+    try {
+      const entries = fs.readdirSync(artifactDir, { withFileTypes: true });
+      console.log(`\nChecking ${artifactDir}:`);
+      entries.forEach(entry => {
+        const fullPath = path.join(artifactDir, entry.name);
+        const stat = fs.statSync(fullPath);
+        console.log(`  ${entry.isDirectory() ? 'DIR' : 'FILE'}: ${entry.name} (${stat.size} bytes)`);
+      });
+    } catch (e) {
+      // Directory might not exist, continue
+      continue;
+    }
+    
+    // Check for expected names first
     const zipPath = path.join(artifactDir, 'shared-node-modules.zip');
     const tarPath = path.join(artifactDir, 'shared-node-modules.tar.gz');
     
@@ -85,6 +104,27 @@ function setupLambdasEnv() {
     } else if (fs.existsSync(tarPath)) {
       foundArchive = { type: 'tar', path: tarPath };
       console.log(`Found archive at: ${tarPath}`);
+      break;
+    }
+    
+    // Also check for any zip or tar.gz files (CodePipeline may rename them)
+    // Look for files that match patterns like: build-123.zip, artifact.zip, etc.
+    const allFiles = fs.readdirSync(artifactDir);
+    const zipFiles = allFiles.filter(f => f.endsWith('.zip'));
+    const tarFiles = allFiles.filter(f => f.endsWith('.tar.gz') || f.endsWith('.tgz'));
+    
+    console.log(`  Found ${zipFiles.length} zip files, ${tarFiles.length} tar files`);
+    
+    // Prefer zip files (smaller, faster)
+    if (zipFiles.length > 0) {
+      const firstZip = path.join(artifactDir, zipFiles[0]);
+      foundArchive = { type: 'zip', path: firstZip };
+      console.log(`Found zip archive (renamed) at: ${firstZip}`);
+      break;
+    } else if (tarFiles.length > 0) {
+      const firstTar = path.join(artifactDir, tarFiles[0]);
+      foundArchive = { type: 'tar', path: firstTar };
+      console.log(`Found tar archive (renamed) at: ${firstTar}`);
       break;
     }
   }
