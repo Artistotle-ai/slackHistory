@@ -32,11 +32,28 @@ function setupLambdasEnv() {
   console.log('=== Setting up Lambda functions environment ===');
   
   // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR_<SourceIdentifier>
+  // Artifact names follow pattern: Artifact_<ActionName>
+  // Source artifact: Artifact_Source_GitHub_Source
+  // Layer artifact: Artifact_Layer_Build_Deploy (from action Layer_Build_Deploy)
   // Find all CODEBUILD_SRC_DIR_* environment variables
   const codebuildSrcDir = process.env.CODEBUILD_SRC_DIR || PROJECT_ROOT;
   const artifactEnvVars = Object.keys(process.env)
     .filter(key => key.startsWith('CODEBUILD_SRC_DIR_') && key !== 'CODEBUILD_SRC_DIR')
     .map(key => ({ name: key, path: process.env[key] }));
+  
+  // Also check for specific artifact names based on action names
+  const possibleArtifactEnvNames = [
+    'CODEBUILD_SRC_DIR_Artifact_Layer_Build_Deploy',  // Based on action name
+    'CODEBUILD_SRC_DIR_LayerBuildArtifact',           // Based on artifact name
+    'CODEBUILD_SRC_DIR_Artifact_Source_GitHub_Source', // Source artifact
+  ];
+  
+  possibleArtifactEnvNames.forEach(envName => {
+    const envPath = process.env[envName];
+    if (envPath && !artifactEnvVars.find(v => v.name === envName)) {
+      artifactEnvVars.push({ name: envName, path: envPath });
+    }
+  });
   
   console.log(`\nFound ${artifactEnvVars.length} artifact environment variables:`);
   artifactEnvVars.forEach(({ name, path: envPath }) => {
