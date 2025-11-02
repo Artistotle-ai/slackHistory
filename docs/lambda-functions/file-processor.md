@@ -23,15 +23,17 @@ Processes DynamoDB stream records. Downloads Slack files and stores in S3.
 
 ## Process Flow
 
-1. Receive DynamoDB stream event
-2. Filter records: messages with `files` attribute
-3. For each file:
+1. Receive DynamoDB stream event (INSERT/MODIFY on messages with files)
+2. Unmarshall stream records from DynamoDB format
+3. Filter records: messages with `files` attribute and no `files_s3` (or incomplete)
+4. Get OAuth credentials from Secrets Manager (cached for warm starts)
+5. For each file:
    - Get valid bot token (auto-refreshes if expired)
-   - Download from Slack using `url_private` and bot token
-   - Upload to S3 (`team_id/channel_id/file_id`)
-   - Update DynamoDB item with S3 URI in `files_s3` array
-4. Retry on failures with exponential backoff
-5. Mark failed items with `files_fetch_failed = true`
+   - **Stream download** from Slack using `url_private` with Authorization header
+   - **Stream upload** to S3 without loading into memory (handles large files)
+   - Upload to S3 key: `slack/{team_id}/{channel_id}/{ts}/{file_id}`
+   - Update DynamoDB item with S3 keys in `files_s3` array
+6. Mark failed items with `files_fetch_failed = true` for retry
 
 ## Permissions
 
