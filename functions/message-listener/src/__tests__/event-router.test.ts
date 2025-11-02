@@ -1,16 +1,5 @@
-import { routeEvent } from '../event-router';
-import {
-  UrlVerificationEvent,
-  MessageEvent,
-  MessageChangedEvent,
-  MessageDeletedEvent,
-  ChannelCreatedEvent,
-  ChannelRenameEvent,
-  ChannelDeletedEvent,
-  ChannelArchiveEvent,
-  ChannelUnarchiveEvent,
-  UnknownEvent,
-} from 'mnemosyne-slack-shared';
+// Set environment variable before importing modules
+process.env.SLACK_ARCHIVE_TABLE = 'test-table';
 
 // Mock handlers modules that are dynamically imported
 jest.mock('../handlers/message-handlers', () => ({
@@ -27,6 +16,12 @@ jest.mock('../handlers/channel-handlers', () => ({
   handleChannelUnarchive: jest.fn(),
 }));
 
+jest.mock('../repositories', () => ({
+  getMessageRepository: jest.fn(() => ({
+    save: jest.fn(),
+  })),
+}));
+
 jest.mock('mnemosyne-slack-shared', () => ({
   ...jest.requireActual('mnemosyne-slack-shared'),
   logger: {
@@ -38,6 +33,21 @@ jest.mock('mnemosyne-slack-shared', () => ({
   getMessageChannelId: jest.fn((event: any) => event.channel || event.channel_id),
 }));
 
+import { routeEvent } from '../event-router';
+import {
+  UrlVerificationEvent,
+  MessageEvent,
+  MessageChangedEvent,
+  MessageDeletedEvent,
+  ChannelCreatedEvent,
+  ChannelRenameEvent,
+  ChannelDeletedEvent,
+  ChannelArchiveEvent,
+  ChannelUnarchiveEvent,
+  UnknownEvent,
+} from 'mnemosyne-slack-shared';
+
+// Import mocked handlers
 const messageHandlers = require('../handlers/message-handlers');
 const channelHandlers = require('../handlers/channel-handlers');
 
@@ -47,17 +57,14 @@ describe('event-router', () => {
   });
 
   describe('routeEvent', () => {
-    it('should route url_verification events', async () => {
+    it('should throw error for url_verification events', async () => {
       const event: UrlVerificationEvent = {
         type: 'url_verification',
         challenge: 'test-challenge',
       };
 
-      await routeEvent(event);
-
-      // URL verification should be handled before routing
-      expect(messageHandlers.handleMessage).not.toHaveBeenCalled();
-      expect(channelHandlers.handleChannelCreated).not.toHaveBeenCalled();
+      // URL verification should be handled before routing - should throw error
+      await expect(routeEvent(event)).rejects.toThrow('URL verification should be handled before routing');
     });
 
     it('should route message events', async () => {
@@ -65,11 +72,12 @@ describe('event-router', () => {
         type: 'message',
         team_id: 'T123456',
         channel: 'C123456',
+        channel_id: 'C123456',
         ts: '1234567890.123456',
         text: 'Hello',
       };
 
-      (messageHandlers.handleMessage as jest.Mock).mockResolvedValue(undefined);
+      messageHandlers.handleMessage.mockResolvedValue(undefined);
 
       await routeEvent(event);
 
@@ -81,19 +89,23 @@ describe('event-router', () => {
     });
 
     it('should route message_changed events', async () => {
-      const event: MessageChangedEvent = {
+      // MessageChangedEvent needs ts or event_ts for routing, but it's not in the type
+      // The router checks "ts" in event, so we need to cast to include it for routing
+      const event = {
         type: 'message',
         subtype: 'message_changed',
         team_id: 'T123456',
         channel: 'C123456',
+        channel_id: 'C123456',
+        ts: '1234567890.123456', // Required for routing condition
         message: {
           type: 'message',
           ts: '1234567890.123456',
           text: 'Updated',
         },
-      };
+      } as MessageChangedEvent & { ts: string }; // Add ts for routing condition
 
-      (messageHandlers.handleMessageChanged as jest.Mock).mockResolvedValue(undefined);
+      messageHandlers.handleMessageChanged.mockResolvedValue(undefined);
 
       await routeEvent(event);
 
@@ -110,10 +122,12 @@ describe('event-router', () => {
         subtype: 'message_deleted',
         team_id: 'T123456',
         channel: 'C123456',
+        channel_id: 'C123456',
         deleted_ts: '1234567890.123456',
+        ts: '1234567890.123456', // Add ts for routing condition
       };
 
-      (messageHandlers.handleMessageDeleted as jest.Mock).mockResolvedValue(undefined);
+      messageHandlers.handleMessageDeleted.mockResolvedValue(undefined);
 
       await routeEvent(event);
 
@@ -134,7 +148,7 @@ describe('event-router', () => {
         },
       };
 
-      (channelHandlers.handleChannelCreated as jest.Mock).mockResolvedValue(undefined);
+      channelHandlers.handleChannelCreated.mockResolvedValue(undefined);
 
       await routeEvent(event);
 
@@ -154,7 +168,7 @@ describe('event-router', () => {
         },
       };
 
-      (channelHandlers.handleChannelRename as jest.Mock).mockResolvedValue(undefined);
+      channelHandlers.handleChannelRename.mockResolvedValue(undefined);
 
       await routeEvent(event);
 
@@ -171,7 +185,7 @@ describe('event-router', () => {
         channel: 'C123456',
       };
 
-      (channelHandlers.handleChannelDeleted as jest.Mock).mockResolvedValue(undefined);
+      channelHandlers.handleChannelDeleted.mockResolvedValue(undefined);
 
       await routeEvent(event);
 
@@ -190,7 +204,7 @@ describe('event-router', () => {
         user: 'U123456',
       };
 
-      (channelHandlers.handleChannelArchive as jest.Mock).mockResolvedValue(undefined);
+      channelHandlers.handleChannelArchive.mockResolvedValue(undefined);
 
       await routeEvent(event);
 
@@ -209,7 +223,7 @@ describe('event-router', () => {
         user: 'U123456',
       };
 
-      (channelHandlers.handleChannelUnarchive as jest.Mock).mockResolvedValue(undefined);
+      channelHandlers.handleChannelUnarchive.mockResolvedValue(undefined);
 
       await routeEvent(event);
 

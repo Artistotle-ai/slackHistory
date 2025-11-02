@@ -18,6 +18,9 @@ describe('config', () => {
     delete process.env.SLACK_ARCHIVE_TABLE;
     delete process.env.SLACK_SIGNING_SECRET_ARN;
     delete process.env.AWS_REGION;
+    // Clear cache before each test
+    (shared.hasInCache as jest.Mock).mockResolvedValue(false);
+    (shared.getFromCache as jest.Mock).mockResolvedValue(null);
   });
 
   describe('loadConfig', () => {
