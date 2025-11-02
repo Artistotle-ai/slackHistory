@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import * as path from 'path';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -163,10 +164,11 @@ export class MainInfraStack extends cdk.Stack {
     // Layer will be published by pipeline, but we create the layer resource here
     // so it can be referenced and attached to Lambda functions
     // Pipeline will publish new versions, but the layer name stays the same
+    // Use placeholder directory structure (pipeline will publish actual versions)
     const slackSharedLayer = new lambda.LayerVersion(this, 'SlackSharedLayer', {
       layerVersionName: `${appPrefix}SlackSharedLayer`,
-      code: lambda.Code.fromInline('// Placeholder - actual layer published by pipeline'),
-      compatibleRuntimes: [lambda.Runtime.NODEJS_22_X],
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'layer-placeholder')), // Minimal placeholder directory (nodejs/ structure)
+      compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
       compatibleArchitectures: [lambda.Architecture.ARM_64],
       description: 'Shared utilities and types for Mnemosyne Slack functions - managed by pipeline',
       // Note: This is a placeholder layer version. The pipeline will publish actual versions.
@@ -193,7 +195,7 @@ export class MainInfraStack extends cdk.Stack {
     // Code is deployed ONLY via pipeline - using placeholder inline code for initial creation
     this.messageListenerFunction = new lambda.Function(this, 'MessageListenerFunction', {
       functionName: `${appPrefix}MessageListener`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
       // Placeholder code - actual code deployed via pipeline only
       code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 503, body: "Lambda not deployed via pipeline" });'),
@@ -227,7 +229,7 @@ export class MainInfraStack extends cdk.Stack {
     // Actual code will be deployed via pipeline when file-processor is implemented
     this.fileProcessorFunction = new lambda.Function(this, 'FileProcessorFunction', {
       functionName: `${appPrefix}FileProcessor`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
       // Placeholder code - actual code deployed via pipeline only
       code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 503, body: "Lambda not deployed via pipeline" });'),
@@ -264,7 +266,7 @@ export class MainInfraStack extends cdk.Stack {
     // OAuth callback Lambda function
     const oauthCallbackFunction = new lambda.Function(this, 'OAuthCallbackFunction', {
       functionName: `${appPrefix}OAuthCallback`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
       code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 503, body: "Lambda not deployed via pipeline" });'),
       handler: 'index.handler',

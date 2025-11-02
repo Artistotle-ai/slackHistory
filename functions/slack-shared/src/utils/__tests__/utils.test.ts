@@ -75,12 +75,12 @@ describe('utils', () => {
   describe('getTokenItemCacheKey', () => {
     it('should generate token cache key', () => {
       const result = getTokenItemCacheKey('T123456', 'test-table');
-      expect(result).toBe('token:test-table:T123456');
+      expect(result).toBe('oauth_token:test-table:T123456');
     });
 
     it('should handle different team IDs and table names', () => {
       const result = getTokenItemCacheKey('T789', 'other-table');
-      expect(result).toBe('token:other-table:T789');
+      expect(result).toBe('oauth_token:other-table:T789');
     });
   });
 

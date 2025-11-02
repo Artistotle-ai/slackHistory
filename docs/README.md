@@ -17,6 +17,7 @@ Slack History Archiver - bypasses free plan message retention limits by archivin
 - **[Architecture](infrastructure/architecture.md)** - Stacks, resources, event flow
 - **[Deployment Guide](infrastructure/deployment.md)** - Deploy to AWS
 - **[Secrets Setup](infrastructure/secrets-setup.md)** - Configure Slack credentials
+- **[Lambda Layer](infrastructure/lambda-layer.md)** - Shared code layer implementation
 
 ### Data Model
 - **[Data Schema](requirements/requirements.md)** - DynamoDB item structure and key patterns

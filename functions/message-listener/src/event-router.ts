@@ -45,9 +45,6 @@ async function getChannelHandlers() {
   return channelHandlersPromise;
 }
 
-/**
- * Route event to appropriate handler using discriminated union narrowing
- */
 export async function routeEvent(event: StrictSlackEvent): Promise<void> {
   // URL verification should be handled before routing
   if (event.type === "url_verification") {
@@ -70,7 +67,8 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
 
   // Handle message events - TypeScript narrows based on discriminated union
   // Message events can be: new message, edited (message_changed), or deleted (message_deleted)
-  if (event.type === "message" && "ts" in event) {
+  // Note: MessageChangedEvent doesn't have ts at top level, but we check for it or subtype
+  if (event.type === "message" && ("ts" in event || "subtype" in event)) {
     // Type guard: check if it's a valid message event (not UnknownEvent)
     // Message events can have channel/channel_id in different formats depending on subtype
     if (("channel" in event || "channel_id" in event) && "team_id" in event) {
