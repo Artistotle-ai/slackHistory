@@ -1,5 +1,5 @@
-import { getFromCache, setInCache } from "./cache";
-import { getSecretValue } from "./secrets-utils";
+import { getFromCache, setInCache } from "../utils/cache";
+import { getSecretValue } from "../utils/secrets-utils";
 
 const OAUTH_CREDENTIALS_CACHE_KEY = "oauth_credentials";
 

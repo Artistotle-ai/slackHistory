@@ -1,5 +1,5 @@
-import { TOKEN_DEFAULT_TTL } from "../settings";
-import { BaseSlackEvent, cachableElement } from "../types";
+import { TOKEN_DEFAULT_TTL } from "../config/settings";
+import { BaseSlackEvent, cachableElement } from "../config/types";
 /**
  * In-memory cache utility for Lambda warm starts
  * 

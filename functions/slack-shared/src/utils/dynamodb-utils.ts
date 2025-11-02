@@ -3,7 +3,7 @@ import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb";
 import { NodeHttpHandler } from "@aws-sdk/node-http-handler";
 import * as http from "http";
 import * as https from "https";
-import { DYNAMU_MAX_KEY_LENGTH_BYTES} from "../settings";
+import { DYNAMU_MAX_KEY_LENGTH_BYTES} from "../config/settings";
 import { getFromCache, hasInCache, setInCache } from "./cache";
 
 // Create DynamoDB client and document client (singleton pattern with keep-alive)

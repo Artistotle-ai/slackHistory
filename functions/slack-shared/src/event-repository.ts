@@ -1,4 +1,4 @@
-import { BaseSlackEvent } from "./types";
+import { BaseSlackEvent } from "./config/types";
 import { putItem, updateItem, queryItems, getLatestItem } from "./utils/dynamodb-utils";
 import { getFromCache, setInCache } from "./utils/cache";
 

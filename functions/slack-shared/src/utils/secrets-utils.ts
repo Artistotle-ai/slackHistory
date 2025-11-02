@@ -6,7 +6,7 @@ import { NodeHttpHandler } from "@aws-sdk/node-http-handler";
 import * as http from "http";
 import * as https from "https";
 import { getFromCache, setInCache } from "./cache";
-import { SECRET_CACHE_PREFIX } from "../settings";
+import { SECRET_CACHE_PREFIX } from "../config/settings";
 
 // Secrets Manager client (singleton pattern with keep-alive)
 // Global variables persist across warm Lambda invocations
