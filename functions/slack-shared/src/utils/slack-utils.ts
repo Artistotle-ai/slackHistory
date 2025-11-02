@@ -1,4 +1,12 @@
-import * as crypto from "crypto";
+// Lazy load crypto module (only when needed)
+let cryptoModule: typeof import("crypto") | null = null;
+
+function getCrypto() {
+  if (!cryptoModule) {
+    cryptoModule = require("crypto") as typeof import("crypto");
+  }
+  return cryptoModule;
+}
 import { SlackFile, SlackFileMetadata } from "../config/types";
 
 /**
@@ -24,6 +32,9 @@ export function verifySlackSignature(
 
   // Create the signature base string
   const sigBaseString = `v0:${timestamp}:${body}`;
+  
+  // Lazy load crypto when needed
+  const crypto = getCrypto();
   
   // Create the signature
   const hmac = crypto.createHmac("sha256", signingSecret);
