@@ -46,24 +46,46 @@ async function buildLayer() {
     ).filter(p => fs.existsSync(p))
   ];
   
-  // Use merge-package-json library
-  const mergePackageJson = require('merge-package-json');
-  
   // Read and parse all package.json files
   const packages = pkgPaths.map(pkgPath => {
     const content = fs.readFileSync(pkgPath, 'utf8');
     return JSON.parse(content);
   });
   
-  // Merge all packages sequentially
-  let mergedPkg = packages[0] || {};
-  for (let i = 1; i < packages.length; i++) {
-    mergedPkg = mergePackageJson(mergedPkg, packages[i]);
-  }
+  // Merge dependencies manually (merge-package-json has issues)
+  const mergedPkg = {
+    name: 'mnemosyne-merged-dependencies',
+    version: '1.0.0',
+    description: 'Merged dependencies for Lambda Layer',
+    dependencies: {},
+    devDependencies: {}
+  };
   
-  // Ensure we have name and version
-  mergedPkg.name = mergedPkg.name || 'mnemosyne-merged-dependencies';
-  mergedPkg.version = mergedPkg.version || '1.0.0';
+  // Merge dependencies from all packages
+  packages.forEach(pkg => {
+    if (pkg.dependencies) {
+      Object.assign(mergedPkg.dependencies, pkg.dependencies);
+    }
+    if (pkg.devDependencies) {
+      Object.assign(mergedPkg.devDependencies, pkg.devDependencies);
+    }
+    // Remove file: protocol from local dependencies
+    Object.keys(mergedPkg.dependencies).forEach(key => {
+      if (mergedPkg.dependencies[key]?.startsWith('file:')) {
+        delete mergedPkg.dependencies[key];
+      }
+    });
+  });
+  
+  // Remove duplicates (keep first occurrence)
+  const seen = {};
+  Object.keys(mergedPkg.dependencies).forEach(key => {
+    if (!seen[key]) {
+      seen[key] = true;
+    } else {
+      delete mergedPkg.dependencies[key];
+    }
+  });
   
   // Write merged package.json
   fs.writeFileSync(
@@ -74,7 +96,8 @@ async function buildLayer() {
   
   // Step 3: Install merged dependencies
   console.log('\nStep 3: Installing merged dependencies...');
-  run('cd merged-deps && npm ci --production || npm install --production');
+  // Use npm install (not npm ci) since merged-deps doesn't have a lockfile
+  run('cd merged-deps && npm install --production --legacy-peer-deps');
   
   // Step 4: Zip node_modules for sharing
   console.log('\nStep 4: Zipping merged node_modules...');
