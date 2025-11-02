@@ -3,12 +3,42 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      nodejs: 22
+      nodejs: 20
     commands:
-      - npm install -g aws-cdk
+      - n 20
+      - node --version
+      - npm --version
+      - npm install
+
+  pre_build:
+    commands:
+      - echo "=== Checking for infrastructure changes ==="
+      - BUILD_TYPE=infrastructure node infrastructure/scripts/check-changes.js
+      - source build-changes.env
+      - echo "HAS_CHANGES=${HAS_CHANGES}"
+      - |
+        if [ "${HAS_CHANGES}" = "false" ]; then
+          echo "No changes detected - skipping infrastructure build"
+          exit 0
+        else
+          echo "Changes detected - proceeding with build"
+          cd infrastructure && npm ci || npm install
+        fi
+
   build:
     commands:
-      - cd infrastructure && npm ci
-      - npm run build
-      - npx cdk synth
-      - npx cdk deploy --all --require-approval never --outputs-file outputs.json
+      - source build-changes.env || true
+      - |
+        if [ "${HAS_CHANGES:-true}" = "false" ]; then
+          echo "Skipping build phase - no changes"
+          exit 0
+        fi
+      - |
+        cd infrastructure
+        npm run build || true
+        npx cdk synth
+
+artifacts:
+  files:
+    - 'infrastructure/cdk.out/**/*'
+  name: InfrastructureArtifact

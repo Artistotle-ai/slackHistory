@@ -94,27 +94,81 @@ export class PipelineLambdasStack extends cdk.Stack {
       ],
     }));
 
-    // Single CodeBuild project for all Lambda builds and deploys
-    // Use standard Amazon Linux 2023 ARM image with SMALL compute type
-    // Node.js 22 will be installed manually in buildspec (Lambda standard images require LARGE)
-    const project = new codebuild.PipelineProject(this, 'LambdasBuildDeployProject', {
-      projectName: `${appPrefix}LambdasBuildDeploy`,
+    // DynamoDB permissions for build hash change detection
+    codeBuildRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+      ],
+      resources: [
+        `arn:aws:dynamodb:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:table:${appPrefix}BuildHashes`,
+      ],
+    }));
+
+    // Infrastructure build project - builds CDK infrastructure
+    const infraBuildProject = new codebuild.PipelineProject(this, 'InfrastructureBuildProject', {
+      projectName: `${appPrefix}InfrastructureBuild`,
       environment: {
-        // Use standard Amazon Linux 2023 ARM image (supports SMALL compute)
-        // Node.js 22 will be installed in buildspec using nvm
+        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
+        computeType: codebuild.ComputeType.SMALL,
+        privileged: false,
+      },
+      source: codebuild.Source.gitHub({
+        owner: 'Artistotle-ai',
+        repo: 'slackHistory',
+        webhook: true,
+        webhookFilters: [
+          codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andFilePathIs('infrastructure/**'),
+        ],
+      }),
+      cache: codebuild.Cache.bucket(artifactBucket, {
+        prefix: 'codebuild-cache-infra-build',
+      }),
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/infrastructure-buildspec.yml'),
+      role: codeBuildRole,
+      logging: {
+        cloudWatch: {
+          logGroup: new logs.LogGroup(this, 'InfrastructureBuildLogs', {
+            logGroupName: `/aws/codebuild/${appPrefix}InfrastructureBuild`,
+            retention: logs.RetentionDays.ONE_WEEK,
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+          }),
+        },
+      },
+      environmentVariables: {
+        APP_PREFIX: {
+          value: appPrefix,
+        },
+      },
+    });
+
+    // Build projects - run in parallel
+    // 1. Layer build project
+    const layerBuildProject = new codebuild.PipelineProject(this, 'LayerBuildProject', {
+      projectName: `${appPrefix}LayerBuild`,
+      environment: {
         buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
         computeType: codebuild.ComputeType.SMALL,
         privileged: false,
       },
       cache: codebuild.Cache.bucket(artifactBucket, {
-        prefix: 'codebuild-cache-lambdas',
+        prefix: 'codebuild-cache-layer-build',
       }),
-      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/lambdas-buildspec.yml'),
+      source: codebuild.Source.gitHub({
+        owner: 'Artistotle-ai',
+        repo: 'slackHistory',
+        webhook: true,
+        webhookFilters: [
+          codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andFilePathIs('functions/slack-shared/**'),
+        ],
+      }),
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/layer-buildspec.yml'),
       role: codeBuildRole,
       logging: {
         cloudWatch: {
-          logGroup: new logs.LogGroup(this, 'LambdasBuildLogs', {
-            logGroupName: `/aws/codebuild/${appPrefix}LambdasBuildDeploy`,
+          logGroup: new logs.LogGroup(this, 'LayerBuildLogs', {
+            logGroupName: `/aws/codebuild/${appPrefix}LayerBuild`,
             retention: logs.RetentionDays.ONE_WEEK,
             removalPolicy: cdk.RemovalPolicy.DESTROY,
           }),
@@ -130,6 +184,50 @@ export class PipelineLambdasStack extends cdk.Stack {
       },
     });
 
+    // 2. Lambdas build project (builds all 3 functions)
+    const lambdasBuildProject = new codebuild.PipelineProject(this, 'LambdasBuildProject', {
+      projectName: `${appPrefix}LambdasBuild`,
+      environment: {
+        buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
+        computeType: codebuild.ComputeType.SMALL,
+        privileged: false,
+      },
+      cache: codebuild.Cache.bucket(artifactBucket, {
+        prefix: 'codebuild-cache-lambdas-build',
+      }),
+      source: codebuild.Source.gitHub({
+        owner: 'Artistotle-ai',
+        repo: 'slackHistory',
+        webhook: true,
+        webhookFilters: [
+          codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andFilePathIs('functions/message-listener/**'),
+          codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andFilePathIs('functions/file-processor/**'),
+          codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andFilePathIs('functions/oauth-callback/**'),
+        ],
+      }),
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/lambdas-buildspec.yml'),
+      role: codeBuildRole,
+      logging: {
+        cloudWatch: {
+          logGroup: new logs.LogGroup(this, 'LambdasBuildLogs', {
+            logGroupName: `/aws/codebuild/${appPrefix}LambdasBuild`,
+            retention: logs.RetentionDays.ONE_WEEK,
+            removalPolicy: cdk.RemovalPolicy.DESTROY,
+          }),
+        },
+      },
+      environmentVariables: {
+        ARTIFACT_BUCKET: {
+          value: artifactBucket.bucketName,
+        },
+        APP_PREFIX: {
+          value: appPrefix,
+        },
+      },
+    });
+
+    // No separate deploy projects needed - deployments happen in the build step
+
     // CodePipeline for all Lambda deployments
     const pipeline = new codepipeline.Pipeline(this, 'LambdasPipeline', {
       pipelineName: `${appPrefix}LambdasPipeline`,
@@ -137,33 +235,39 @@ export class PipelineLambdasStack extends cdk.Stack {
       pipelineType: codepipeline.PipelineType.V2,
     });
 
-    // Source stage - GitHub source via CodeStar connection
-    const sourceOutput = new codepipeline.Artifact();
-    const sourceAction = new codepipeline_actions.CodeStarConnectionsSourceAction({
-      actionName: 'GitHub_Source',
-      owner: 'Artistotle-ai',
-      repo: 'slackHistory',
-      branch: 'main',
-      connectionArn: githubConnectionArn,
-      output: sourceOutput,
-      triggerOnPush: true,
+    // Build stage 1 - Infrastructure and Layer build+deploy in parallel
+    // Layer build also deploys the layer (outputs node_modules zip + layer ARN)
+    const infraBuildOutput = new codepipeline.Artifact('InfrastructureArtifact');
+    const infraBuildAction = new codepipeline_actions.CodeBuildAction({
+      actionName: 'Infrastructure_Build',
+      project: infraBuildProject,
+      outputs: [infraBuildOutput],
+    });
+
+    const layerBuildOutput = new codepipeline.Artifact('LayerBuildArtifact');
+    const layerBuildAction = new codepipeline_actions.CodeBuildAction({
+      actionName: 'Layer_Build_Deploy',
+      project: layerBuildProject,
+      outputs: [layerBuildOutput],
     });
 
     pipeline.addStage({
-      stageName: 'Source',
-      actions: [sourceAction],
+      stageName: 'Build',
+      actions: [infraBuildAction, layerBuildAction],
     });
 
-    // Build and Deploy stage (combined)
-    const buildDeployAction = new codepipeline_actions.CodeBuildAction({
+    // Build and Deploy stage - Lambdas build and deploy in same CodeBuild (just API calls)
+    const lambdasBuildOutput = new codepipeline.Artifact('LambdasBuildArtifacts');
+    const lambdasBuildAction = new codepipeline_actions.CodeBuildAction({
       actionName: 'Lambdas_Build_Deploy',
-      project: project,
-      input: sourceOutput,
+      project: lambdasBuildProject,
+      extraInputs: [layerBuildOutput], // Carry over merged node_modules zip and layer-arn.env
+      outputs: [lambdasBuildOutput],
     });
 
     pipeline.addStage({
-      stageName: 'Build_Deploy',
-      actions: [buildDeployAction],
+      stageName: 'Build_Deploy_Lambdas',
+      actions: [lambdasBuildAction],
     });
 
     // Output pipeline information

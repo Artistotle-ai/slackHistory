@@ -68,6 +68,25 @@ export class MainInfraStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
+    // DynamoDB table for build hashes (change detection)
+    // Simple table: buildKey (PK), hash (string), ttl (number)
+    const buildHashesTable = new dynamodb.Table(this, 'BuildHashesTable', {
+      tableName: `${appPrefix}BuildHashes`,
+      partitionKey: {
+        name: 'buildKey',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      timeToLiveAttribute: 'ttl',
+    });
+
+    // Export table name for pipeline stacks to reference
+    new cdk.CfnOutput(this, 'BuildHashesTableName', {
+      value: buildHashesTable.tableName,
+      exportName: `${appPrefix}BuildHashesTableName`,
+    });
+
     // S3 bucket for Slack files
     this.slackFilesBucket = new s3.Bucket(this, 'SlackFilesBucket', {
       bucketName: `${appPrefix.toLowerCase()}-slack-files-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
@@ -165,9 +184,13 @@ export class MainInfraStack extends cdk.Stack {
     // so it can be referenced and attached to Lambda functions
     // Pipeline will publish new versions, but the layer name stays the same
     // Use placeholder directory structure (pipeline will publish actual versions)
+    const layerPlaceholderPath = path.join(__dirname, '..', 'layer-placeholder');
     const slackSharedLayer = new lambda.LayerVersion(this, 'SlackSharedLayer', {
       layerVersionName: `${appPrefix}SlackSharedLayer`,
-      code: lambda.Code.fromAsset(path.join(__dirname, '..', 'layer-placeholder')), // Minimal placeholder directory (nodejs/ structure)
+      code: lambda.Code.fromAsset(layerPlaceholderPath, {
+        // Explicitly exclude .git files and test zips
+        exclude: ['**/.git/**', '**/*.zip', '**/test-layer.zip'],
+      }),
       compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
       compatibleArchitectures: [lambda.Architecture.ARM_64],
       description: 'Shared utilities and types for Mnemosyne Slack functions - managed by pipeline',

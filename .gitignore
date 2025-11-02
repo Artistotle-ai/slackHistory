@@ -53,6 +53,7 @@ htmlcov/
 
 # Node.js
 node_modules/
+!infrastructure/layer-placeholder/**/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -72,6 +73,15 @@ cdk.out/
 *.js
 *.d.ts
 !jest.config.js
+!infrastructure/scripts/*.js
+!infrastructure/layer-placeholder/**/*.js
+
+# Build outputs
+**/dist/
+**/build/
+**/coverage/
+infrastructure/lib/*.js
+infrastructure/bin/*.js
 
 # Environment variables
 .env

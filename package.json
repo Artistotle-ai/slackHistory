@@ -1,0 +1,18 @@
+{
+  "name": "mnemosyne-slack-history",
+  "version": "1.0.0",
+  "description": "Slack history archiving system with Lambda functions",
+  "private": true,
+  "scripts": {
+    "build:layer": "node infrastructure/scripts/build-layer.js",
+    "build:lambdas": "node infrastructure/scripts/build-lambdas.js",
+    "deploy:layer": "node infrastructure/scripts/deploy-layer.js",
+    "deploy:lambdas": "node infrastructure/scripts/deploy-lambdas.js",
+    "setup:lambdas-env": "node infrastructure/scripts/setup-lambdas-env.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "package-json-merge": "^1.0.0"
+  }
+}
+
