@@ -8,10 +8,18 @@ phases:
       - n 20
       - node --version
       - npm --version
+      - npm install
 
   pre_build:
     commands:
-      - echo "=== Building Infrastructure ==="
+      - echo "=== Checking for infrastructure changes ==="
+      - |
+        if BUILD_TYPE=infrastructure node infrastructure/scripts/check-changes.js; then
+          echo "No changes detected - skipping infrastructure build"
+          exit 0
+        else
+          echo "Changes detected - proceeding with build"
+        fi
       - cd infrastructure && npm ci || npm install
 
   build:
