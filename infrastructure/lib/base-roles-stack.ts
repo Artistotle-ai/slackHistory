@@ -20,7 +20,6 @@ export interface BaseRolesStackProps extends cdk.StackProps {
  */
 export class BaseRolesStack extends cdk.Stack {
   public readonly artifactBucket: s3.Bucket;
-  public readonly slackBotTokenSecret: secretsmanager.Secret;
   public readonly slackSigningSecretSecret: secretsmanager.Secret;
   public readonly ciRole: iam.Role;
   public readonly githubConnection: codeconnections.CfnConnection;
@@ -47,16 +46,30 @@ export class BaseRolesStack extends cdk.Stack {
     });
 
     // Secrets Manager placeholders for Slack credentials
-    this.slackBotTokenSecret = new secretsmanager.Secret(this, 'SlackBotTokenSecret', {
-      secretName: `${appPrefix}/slack/bot-token`,
-      description: 'Slack bot token for Mnemosyne application',
-      // TODO: Populate this secret after stack deployment
-    });
-
     this.slackSigningSecretSecret = new secretsmanager.Secret(this, 'SlackSigningSecretSecret', {
       secretName: `${appPrefix}/slack/signing-secret`,
       description: 'Slack signing secret for request verification',
       // TODO: Populate this secret after stack deployment
+    });
+
+    // Slack OAuth credentials for app installation
+    const slackClientIdSecret = new secretsmanager.Secret(this, 'SlackClientIdSecret', {
+      secretName: `${appPrefix}/slack/client-id`,
+      description: 'Slack OAuth client ID',
+      // TODO: Populate this secret after stack deployment
+    });
+
+    const slackClientSecretSecret = new secretsmanager.Secret(this, 'SlackClientSecretSecret', {
+      secretName: `${appPrefix}/slack/client-secret`,
+      description: 'Slack OAuth client secret',
+      // TODO: Populate this secret after stack deployment
+    });
+
+    // Temporary: Keep old bot token secret for backward compatibility during migration
+    const slackBotTokenSecret = new secretsmanager.Secret(this, 'SlackBotTokenSecret', {
+      secretName: `${appPrefix}/slack/bot-token`,
+      description: 'Slack bot token (deprecated - use OAuth flow instead)',
+      // TODO: Remove this secret after migration to OAuth flow
     });
 
     // CI Role for CodePipeline deployments
@@ -99,12 +112,6 @@ export class BaseRolesStack extends cdk.Stack {
       description: 'S3 bucket for CodePipeline artifacts',
     });
 
-    new cdk.CfnOutput(this, 'SlackBotTokenSecretArn', {
-      value: this.slackBotTokenSecret.secretArn,
-      description: 'Secrets Manager ARN for Slack bot token',
-      exportName: `${appPrefix}SlackBotTokenSecretArn`,
-    });
-
     new cdk.CfnOutput(this, 'SlackSigningSecretArn', {
       value: this.slackSigningSecretSecret.secretArn,
       description: 'Secrets Manager ARN for Slack signing secret',
@@ -121,6 +128,25 @@ export class BaseRolesStack extends cdk.Stack {
       value: this.githubConnection.attrConnectionArn,
       description: 'CodeStar GitHub connection ARN (requires manual authorization in AWS Console)',
       exportName: `${appPrefix}GitHubConnectionArn`,
+    });
+
+    new cdk.CfnOutput(this, 'SlackClientIdSecretArn', {
+      value: slackClientIdSecret.secretArn,
+      description: 'Secrets Manager ARN for Slack OAuth client ID',
+      exportName: `${appPrefix}SlackClientIdSecretArn`,
+    });
+
+    new cdk.CfnOutput(this, 'SlackClientSecretArn', {
+      value: slackClientSecretSecret.secretArn,
+      description: 'Secrets Manager ARN for Slack OAuth client secret',
+      exportName: `${appPrefix}SlackClientSecretArn`,
+    });
+
+    // Temporary: Export old bot token secret for backward compatibility
+    new cdk.CfnOutput(this, 'SlackBotTokenSecretArn', {
+      value: slackBotTokenSecret.secretArn,
+      description: 'Secrets Manager ARN for Slack bot token (deprecated)',
+      exportName: `${appPrefix}SlackBotTokenSecretArn`,
     });
   }
 }

@@ -112,6 +112,30 @@ export class MainInfraStack extends cdk.Stack {
       })
     );
 
+    // OAuth callback Lambda execution role (separate, needs DynamoDB write)
+    const oauthLambdaRole = new iam.Role(this, 'OAuthLambdaExecutionRole', {
+      roleName: `${appPrefix}OAuthLambdaExecutionRole`,
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+    });
+
+    oauthLambdaRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
+    );
+
+    // DynamoDB write for OAuth tokens
+    this.slackArchiveTable.grantWriteData(oauthLambdaRole);
+
+    // Secrets Manager read for OAuth credentials
+    oauthLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['secretsmanager:GetSecretValue'],
+        resources: [
+          `arn:aws:secretsmanager:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:secret:${appPrefix}/slack/*`,
+        ],
+      })
+    );
+
     // Explicit LogGroups for Lambda functions with 7-day retention
     const messageListenerLogGroup = new logs.LogGroup(this, 'MessageListenerLogGroup', {
       logGroupName: `/aws/lambda/${appPrefix}MessageListener`,
@@ -121,6 +145,12 @@ export class MainInfraStack extends cdk.Stack {
 
     const fileProcessorLogGroup = new logs.LogGroup(this, 'FileProcessorLogGroup', {
       logGroupName: `/aws/lambda/${appPrefix}FileProcessor`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const oauthCallbackLogGroup = new logs.LogGroup(this, 'OAuthCallbackLogGroup', {
+      logGroupName: `/aws/lambda/${appPrefix}OAuthCallback`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -139,9 +169,8 @@ export class MainInfraStack extends cdk.Stack {
       memorySize: 256,
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
-        // Import secret ARNs from BaseRolesStack exports (deployed first)
+        // Import secret ARN from BaseRolesStack exports (deployed first)
         SLACK_SIGNING_SECRET_ARN: cdk.Fn.importValue(`${appPrefix}SlackSigningSecretArn`),
-        SLACK_BOT_TOKEN_ARN: cdk.Fn.importValue(`${appPrefix}SlackBotTokenSecretArn`),
         // AWS_REGION is automatically provided by Lambda runtime - do not set manually
       },
       description: 'Deployed via CodePipeline only - do not update manually',
@@ -173,13 +202,41 @@ export class MainInfraStack extends cdk.Stack {
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
         SLACK_FILES_BUCKET: this.slackFilesBucket.bucketName,
-        SLACK_BOT_TOKEN_ARN: cdk.Fn.importValue(`${appPrefix}SlackBotTokenSecretArn`),
+        // Import secret ARNs from BaseRolesStack exports (deployed first)
+        SLACK_CLIENT_ID_ARN: cdk.Fn.importValue(`${appPrefix}SlackClientIdSecretArn`),
+        SLACK_CLIENT_SECRET_ARN: cdk.Fn.importValue(`${appPrefix}SlackClientSecretArn`),
+        // Bot token retrieved from DynamoDB (stored via OAuth callback)
         // AWS_REGION is automatically provided by Lambda runtime - do not set manually
       },
       description: 'Deployed via CodePipeline only - do not update manually',
     });
 
     // TODO: Add DynamoDB stream event source mapping for file processor
+
+    // OAuth callback Lambda function
+    const oauthCallbackFunction = new lambda.Function(this, 'OAuthCallbackFunction', {
+      functionName: `${appPrefix}OAuthCallback`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 503, body: "Lambda not deployed via pipeline" });'),
+      handler: 'index.handler',
+      role: oauthLambdaRole,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 256,
+      environment: {
+        SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
+        SLACK_CLIENT_ID_ARN: cdk.Fn.importValue(`${appPrefix}SlackClientIdSecretArn`),
+        SLACK_CLIENT_SECRET_ARN: cdk.Fn.importValue(`${appPrefix}SlackClientSecretArn`),
+        // REDIRECT_URI will be the function's own URL - Lambda can construct it from AWS_LAMBDA_FUNCTION_NAME
+        // Or it can be provided via Secrets Manager if needed
+      },
+      description: 'Deployed via CodePipeline only - do not update manually',
+    });
+
+    // Function URL for OAuth callback
+    const oauthCallbackUrl = oauthCallbackFunction.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+    });
 
     // Output important resources
     new cdk.CfnOutput(this, 'SlackArchiveTableName', {
@@ -200,6 +257,11 @@ export class MainInfraStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'FileProcessorFunctionName', {
       value: this.fileProcessorFunction.functionName,
       description: 'Lambda function for processing file attachments',
+    });
+
+    new cdk.CfnOutput(this, 'OAuthCallbackFunctionUrl', {
+      value: oauthCallbackUrl.url,
+      description: 'Function URL for Slack OAuth callback',
     });
   }
 }

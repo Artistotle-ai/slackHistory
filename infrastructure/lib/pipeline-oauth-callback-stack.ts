@@ -6,26 +6,25 @@ import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as lambda_event_sources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { BaseRolesStack } from './base-roles-stack';
 
-export interface PipelineDdbStreamStackProps extends cdk.StackProps {
+export interface PipelineOAuthCallbackStackProps extends cdk.StackProps {
   appPrefix: string;
 }
 
 /**
- * PipelineDdbStreamStack - CI/CD for file-processor Lambda
+ * PipelineOAuthCallbackStack - CI/CD for oauth-callback Lambda
  * 
- * Automated deployment pipeline for DynamoDB stream file processor:
- * - Triggers on changes to functions/file-processor/ folder in main branch
+ * Automated deployment pipeline for Slack OAuth callback:
+ * - Triggers on changes to functions/oauth-callback/ folder in main branch
  * - Uses CodeStar connection for GitHub integration
  * - Single CodeBuild step: npm ci, build, test, deploy Lambda
  * - Updates Lambda function code directly via AWS CLI
- * - Processes DynamoDB streams to download and store Slack files in S3
+ * - No manual approval required for continuous deployment
  */
-export class PipelineDdbStreamStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: PipelineDdbStreamStackProps) {
+export class PipelineOAuthCallbackStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props: PipelineOAuthCallbackStackProps) {
     super(scope, id, props);
 
     const { appPrefix } = props;
@@ -46,7 +45,7 @@ export class PipelineDdbStreamStack extends cdk.Stack {
     const githubConnectionArn = cdk.Fn.importValue(`${appPrefix}GitHubConnectionArn`);
 
     // Create IAM role for CodeBuild with all necessary permissions
-    const codeBuildRole = new iam.Role(this, 'FileProcessorBuildDeployRole', {
+    const codeBuildRole = new iam.Role(this, 'OAuthCallbackBuildDeployRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
     });
 
@@ -54,10 +53,15 @@ export class PipelineDdbStreamStack extends cdk.Stack {
     artifactBucket.grantReadWrite(codeBuildRole);
 
     // Add Lambda update permissions to CodeBuild role
+    // Pipeline is the ONLY way to deploy Lambda code
     codeBuildRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ['lambda:UpdateFunctionCode'],
-      resources: [`arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:MnemosyneFileProcessor`],
+      actions: [
+        'lambda:UpdateFunctionCode',
+        'lambda:GetFunction',
+        'lambda:UpdateFunctionConfiguration',
+      ],
+      resources: [`arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:${appPrefix}OAuthCallback`],
     }));
 
     // Allow writing build logs to CloudWatch Logs
@@ -79,14 +83,14 @@ export class PipelineDdbStreamStack extends cdk.Stack {
     // Using CfnProject directly to specify Lambda compute with ARM image
     // Changed logical ID to force replacement of old PipelineProject-based resource
     // Proactive log group with 7-day retention
-    const fileProcessorBuildLogGroup = new logs.LogGroup(this, 'FileProcessorBuildLogs', {
-      logGroupName: `/aws/codebuild/${appPrefix}FileProcessorBuildDeployV3`,
+    const oauthCallbackBuildLogGroup = new logs.LogGroup(this, 'OAuthCallbackBuildLogs', {
+      logGroupName: `/aws/codebuild/${appPrefix}OAuthCallbackBuildDeploy`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const lambdaBuildDeployProject = new codebuild.CfnProject(this, 'LambdaBuildDeployProjectV3', {
-      name: `${appPrefix}FileProcessorBuildDeployV3`,
+    const lambdaBuildDeployProject = new codebuild.CfnProject(this, 'LambdaBuildDeployProject', {
+      name: `${appPrefix}OAuthCallbackBuildDeploy`,
       artifacts: {
         type: 'CODEPIPELINE',
       },
@@ -100,18 +104,22 @@ export class PipelineDdbStreamStack extends cdk.Stack {
             name: 'ARTIFACT_BUCKET',
             value: artifactBucket.bucketName,
           },
+          {
+            name: 'FUNCTION_NAME',
+            value: `${appPrefix}OAuthCallback`,
+          },
         ],
       },
       logsConfig: {
         cloudWatchLogs: {
           status: 'ENABLED',
-          groupName: fileProcessorBuildLogGroup.logGroupName,
+          groupName: oauthCallbackBuildLogGroup.logGroupName,
         },
       },
       source: {
         type: 'CODEPIPELINE',
         buildSpec: (() => {
-          const buildSpec = codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/file-processor-buildspec.yml');
+          const buildSpec = codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/oauth-callback-buildspec.yml');
           return buildSpec.toBuildSpec();
         })(),
       },
@@ -121,9 +129,9 @@ export class PipelineDdbStreamStack extends cdk.Stack {
     // Create a Project wrapper for use in CodePipeline
     const project = codebuild.Project.fromProjectName(this, 'LambdaBuildDeployProjectWrapper', lambdaBuildDeployProject.ref);
 
-    // CodePipeline for file-processor deployment
-    const pipeline = new codepipeline.Pipeline(this, 'DdbStreamPipeline', {
-      pipelineName: `${appPrefix}FileProcessorPipeline`,
+    // CodePipeline for oauth-callback deployment
+    const pipeline = new codepipeline.Pipeline(this, 'OAuthCallbackPipeline', {
+      pipelineName: `${appPrefix}OAuthCallbackPipeline`,
       artifactBucket: artifactBucket,
       pipelineType: codepipeline.PipelineType.V2,
     });
@@ -147,7 +155,7 @@ export class PipelineDdbStreamStack extends cdk.Stack {
 
     // Build and Deploy stage (combined)
     const buildDeployAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'Lambda_Build_Deploy_V3',
+      actionName: 'Lambda_Build_Deploy',
       project: project,
       input: sourceOutput,
     });
@@ -158,9 +166,10 @@ export class PipelineDdbStreamStack extends cdk.Stack {
     });
 
     // Output pipeline information
-    new cdk.CfnOutput(this, 'DdbStreamPipelineName', {
+    new cdk.CfnOutput(this, 'OAuthCallbackPipelineName', {
       value: pipeline.pipelineName,
-      description: 'CodePipeline for file-processor Lambda deployment with DynamoDB stream',
+      description: 'CodePipeline for oauth-callback Lambda deployment',
     });
   }
 }
+
