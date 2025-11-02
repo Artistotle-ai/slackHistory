@@ -177,7 +177,7 @@ export class MainInfraStack extends cdk.Stack {
       handler: 'index.handler',
       role: lambdaExecutionRole,
       timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
+      memorySize: 512, // Increased memory for faster CPU and better cold start performance
       deadLetterQueue: messageListenerDlq, // DLQ for DynamoDB write errors
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
@@ -245,7 +245,7 @@ export class MainInfraStack extends cdk.Stack {
       handler: 'index.handler',
       role: oauthLambdaRole,
       timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
+      memorySize: 512, // Increased memory for faster CPU and better cold start performance
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
         SLACK_CLIENT_ID_ARN: cdk.Fn.importValue(`${appPrefix}SlackClientIdSecretArn`),

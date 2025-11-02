@@ -4,7 +4,7 @@
   "description": "Slack message listener Lambda function for Mnemosyne",
   "main": "dist/index.js",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --external:@aws-sdk/* --minify",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/index.js --external:@aws-sdk/* --external:aws-lambda --minify --tree-shaking=true --banner:js='globalThis.require = require;'",
     "build:dev": "tsc",
     "test": "jest --passWithNoTests",
     "watch": "tsc -w"
