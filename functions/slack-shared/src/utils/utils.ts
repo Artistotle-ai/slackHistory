@@ -1,4 +1,4 @@
-import { TOKEN_CACHE_PREFIX } from "../settings";
+import { TOKEN_CACHE_PREFIX } from "../config/settings";
 
 /**
  * Cap array at maximum length, keeping the most recent entries

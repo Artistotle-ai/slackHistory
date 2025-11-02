@@ -1,7 +1,10 @@
 // Export all types and utilities
-export * from "./types";
-export * from "./settings";
+export * from "./config/types";
+export * from "./config/settings";
 export * from "./event-repository";
+
+// Export config from config folder
+export * from "./config/oauth-config";
 
 // Export utilities from utils folder
 export * from "./utils/utils";

@@ -1,8 +1,8 @@
 import { getDynamoDb, GetCommand, dynamoDeleteItem, dynamoGetById } from "./dynamodb-utils";
 import { getFromCache, setInCache, hasInCache, removeFromCache } from "./cache";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
-import { OAuthTokenItem, RefreshTokenResponse } from "../types";
-import { REFRESH_CACHE_PREFIX, TOKEN_CACHE_PREFIX, TOKEN_DEFAULT_TTL, TOKEN_REFRESH_BUFFER } from "../settings";
+import { OAuthTokenItem, RefreshTokenResponse } from "../config/types";
+import { REFRESH_CACHE_PREFIX, TOKEN_CACHE_PREFIX, TOKEN_DEFAULT_TTL, TOKEN_REFRESH_BUFFER } from "../config/settings";
 import { getTokenItemDbId, getTokenItemCacheKey } from "./utils";
 
 // Cache keys

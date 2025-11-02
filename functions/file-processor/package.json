@@ -4,15 +4,16 @@
   "description": "Slack file processor Lambda function for Mnemosyne",
   "main": "dist/index.js",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --external:aws-sdk --minify",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --external:@aws-sdk/* --minify",
     "build:dev": "tsc",
     "test": "jest --passWithNoTests",
     "watch": "tsc -w"
   },
   "dependencies": {
-    "aws-sdk": "^2.1541.0"
+    "mnemosyne-slack-shared": "file:../slack-shared"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.130",
     "@types/node": "^22.0.0",
     "@types/jest": "^29.5.12",
     "esbuild": "^0.19.0",

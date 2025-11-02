@@ -1,7 +1,7 @@
 import {
   LambdaFunctionURLRequest,
   LambdaFunctionURLResponse,
-} from "../types";
+} from "../config/types";
 
 /**
  * Parse and validate request body
