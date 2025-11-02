@@ -14,10 +14,8 @@ phases:
       - npm --version
   install:
     commands:
-      # PHASE 1: BUILD ALL NODE.JS APPS FIRST
-      # Build slack-shared first (required by all lambdas)
       - echo "=== PHASE 1: Building all Node.js apps ==="
-      - echo "Building slack-shared..."
+      - echo "Building slack-shared (required by all lambdas)..."
       - |
         if [ -d "functions/slack-shared" ]; then
           cd functions/slack-shared
