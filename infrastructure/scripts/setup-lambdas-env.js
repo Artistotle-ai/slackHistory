@@ -271,8 +271,9 @@ function setupLambdasEnv() {
       foundArchive = { type: 'tar', path: tarToUse };
       console.log(`Found tar archive: ${path.basename(tarToUse)} at: ${tarToUse}`);
       break;
+    }
     // Don't try unknown files - they're likely not archives
-    // If we reach here, the artifact wasn't found
+    // If we reach here, the artifact wasn't found in this directory
   }
   
   if (!foundArchive) {
@@ -290,24 +291,13 @@ function setupLambdasEnv() {
     return; // Exit gracefully - let lambdas build with their own deps
   }
 
-  if (foundArchive) {
-    if (foundArchive.type === 'zip') {
-      console.log(`Extracting ${path.basename(foundArchive.path)}...`);
-      run(`mkdir -p ${TMP_DIR} && unzip -q ${foundArchive.path} -d ${TMP_DIR}`);
-    } else {
-      console.log(`Extracting ${path.basename(foundArchive.path)}...`);
-      run(`mkdir -p ${TMP_DIR} && tar -xzf ${foundArchive.path} -C ${TMP_DIR}`);
-    }
+  // Extract the found archive
+  if (foundArchive.type === 'zip') {
+    console.log(`Extracting ${path.basename(foundArchive.path)}...`);
+    run(`mkdir -p ${TMP_DIR} && unzip -q ${foundArchive.path} -d ${TMP_DIR}`);
   } else {
-    console.error('ERROR: Shared node_modules archive not found!');
-    console.error('Checked locations:');
-    possibleArtifactDirs.forEach(dir => {
-      console.error(`  - ${path.join(dir, 'shared-node-modules.zip')}`);
-      console.error(`  - ${path.join(dir, 'shared-node-modules.tar.gz')}`);
-    });
-    console.error(`CODEBUILD_SRC_DIR: ${process.env.CODEBUILD_SRC_DIR || 'not set'}`);
-    console.error(`PROJECT_ROOT: ${PROJECT_ROOT}`);
-    process.exit(1);
+    console.log(`Extracting ${path.basename(foundArchive.path)}...`);
+    run(`mkdir -p ${TMP_DIR} && tar -xzf ${foundArchive.path} -C ${TMP_DIR}`);
   }
   
   if (!fs.existsSync(`${TMP_DIR}/node_modules`)) {
