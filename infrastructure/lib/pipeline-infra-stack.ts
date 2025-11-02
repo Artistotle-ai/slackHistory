@@ -119,6 +119,7 @@ export class PipelineInfraStack extends cdk.Stack {
       projectName: `${appPrefix}CdkBuildDeploy`,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
+        computeType: codebuild.ComputeType.MEDIUM,
         privileged: false,
       },
       cache: codebuild.Cache.bucket(artifactBucket, {

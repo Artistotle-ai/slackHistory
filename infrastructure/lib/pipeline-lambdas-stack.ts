@@ -113,7 +113,7 @@ export class PipelineLambdasStack extends cdk.Stack {
       projectName: `${appPrefix}LayerBuild`,
       environment: {
         buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
-        computeType: codebuild.ComputeType.SMALL,
+        computeType: codebuild.ComputeType.MEDIUM,
         privileged: false,
       },
       cache: codebuild.Cache.bucket(artifactBucket, {
@@ -146,7 +146,7 @@ export class PipelineLambdasStack extends cdk.Stack {
       projectName: `${appPrefix}LambdasBuild`,
       environment: {
         buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
-        computeType: codebuild.ComputeType.SMALL,
+        computeType: codebuild.ComputeType.MEDIUM,
         privileged: false,
       },
       cache: codebuild.Cache.bucket(artifactBucket, {
