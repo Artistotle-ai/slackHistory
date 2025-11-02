@@ -110,30 +110,51 @@ function buildLambdas() {
         break;
       }
       
-      // Also check for any zip or tar.gz files (CodePipeline may rename them)
-      // Look for files that match patterns like: build-123.zip, artifact.zip, etc.
-      const allFiles = fs.readdirSync(artifactDir);
-      const zipFiles = allFiles.filter(f => f.endsWith('.zip'));
-      const tarFiles = allFiles.filter(f => f.endsWith('.tar.gz') || f.endsWith('.tgz'));
+      // Also check for any zip or tar.gz files (CodePipeline uses short IDs like o4nKsyj.zip)
+      // Recursively search for archives - CodePipeline may rename them to short identifiers
+      function findArchives(dir, depth = 0) {
+        const archives = { zip: [], tar: [] };
+        if (depth > 2) return archives; // Limit recursion depth
+        
+        try {
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              // Recursively search subdirectories
+              const subArchives = findArchives(fullPath, depth + 1);
+              archives.zip.push(...subArchives.zip);
+              archives.tar.push(...subArchives.tar);
+            } else if (entry.isFile()) {
+              if (entry.name.endsWith('.zip')) {
+                archives.zip.push(fullPath);
+              } else if (entry.name.endsWith('.tar.gz') || entry.name.endsWith('.tgz')) {
+                archives.tar.push(fullPath);
+              }
+            }
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+        return archives;
+      }
       
-      console.log(`  Found ${zipFiles.length} zip files, ${tarFiles.length} tar files`);
+      const archives = findArchives(artifactDir);
+      console.log(`  Found ${archives.zip.length} zip files, ${archives.tar.length} tar files (searched recursively)`);
       
       // Prefer zip files (smaller, faster)
-      if (zipFiles.length > 0) {
-        // If we have the expected name, prefer it
-        const expectedZip = zipFiles.find(f => f === 'shared-node-modules.zip');
-        const zipToUse = expectedZip || zipFiles[0];
-        const firstZip = path.join(artifactDir, zipToUse);
-        foundArchive = { type: 'zip', path: firstZip };
-        console.log(`Found zip archive ${zipToUse} at: ${firstZip}`);
+      if (archives.zip.length > 0) {
+        // Prefer expected name if found, otherwise use first
+        const expectedZip = archives.zip.find(f => f.includes('shared-node-modules.zip') || f.endsWith('shared-node-modules.zip'));
+        const zipToUse = expectedZip || archives.zip[0];
+        foundArchive = { type: 'zip', path: zipToUse };
+        console.log(`Found zip archive: ${path.basename(zipToUse)} at: ${zipToUse}`);
         break;
-      } else if (tarFiles.length > 0) {
-        // If we have the expected name, prefer it
-        const expectedTar = tarFiles.find(f => f === 'shared-node-modules.tar.gz');
-        const tarToUse = expectedTar || tarFiles[0];
-        const firstTar = path.join(artifactDir, tarToUse);
-        foundArchive = { type: 'tar', path: firstTar };
-        console.log(`Found tar archive ${tarToUse} at: ${firstTar}`);
+      } else if (archives.tar.length > 0) {
+        const expectedTar = archives.tar.find(f => f.includes('shared-node-modules.tar.gz') || f.endsWith('shared-node-modules.tar.gz'));
+        const tarToUse = expectedTar || archives.tar[0];
+        foundArchive = { type: 'tar', path: tarToUse };
+        console.log(`Found tar archive: ${path.basename(tarToUse)} at: ${tarToUse}`);
         break;
       }
     }
