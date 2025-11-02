@@ -31,18 +31,45 @@ function run(cmd, options = {}) {
 function setupLambdasEnv() {
   console.log('=== Setting up Lambda functions environment ===');
   
-  // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR/<ArtifactName>
-  // Artifact name is "LayerBuildArtifact", so check CODEBUILD_SRC_DIR/LayerBuildArtifact
+  // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR_<SourceIdentifier>
+  // Find all CODEBUILD_SRC_DIR_* environment variables
   const codebuildSrcDir = process.env.CODEBUILD_SRC_DIR || PROJECT_ROOT;
+  const artifactEnvVars = Object.keys(process.env)
+    .filter(key => key.startsWith('CODEBUILD_SRC_DIR_') && key !== 'CODEBUILD_SRC_DIR')
+    .map(key => ({ name: key, path: process.env[key] }));
   
-  // Primary location: CODEBUILD_SRC_DIR/LayerBuildArtifact
-  const layerArtifactDir = path.join(codebuildSrcDir, 'LayerBuildArtifact');
+  console.log(`\nFound ${artifactEnvVars.length} artifact environment variables:`);
+  artifactEnvVars.forEach(({ name, path: envPath }) => {
+    console.log(`  ${name}=${envPath}`);
+  });
   
-  const possibleArtifactDirs = [
-    layerArtifactDir, // CODEBUILD_SRC_DIR/LayerBuildArtifact (standard location)
-    codebuildSrcDir, // Root source directory (fallback)
-    ARTIFACT_DIR, // Original path (fallback)
-  ];
+  // Build list of possible artifact directories
+  const possibleArtifactDirs = [];
+  
+  // 1. Check all CODEBUILD_SRC_DIR_* environment variables
+  artifactEnvVars.forEach(({ name, path: envPath }) => {
+    if (envPath && fs.existsSync(envPath)) {
+      possibleArtifactDirs.push(envPath);
+    }
+    // Also check subdirectory with artifact name
+    if (envPath) {
+      const subDir = path.join(envPath, 'LayerBuildArtifact');
+      if (fs.existsSync(subDir)) {
+        possibleArtifactDirs.push(subDir);
+      }
+    }
+  });
+  
+  // 2. Check CODEBUILD_SRC_DIR/LayerBuildArtifact (standard pattern)
+  possibleArtifactDirs.push(path.join(codebuildSrcDir, 'LayerBuildArtifact'));
+  
+  // 3. Check parent directory (CodePipeline might extract to sibling dirs)
+  const parentDir = path.dirname(codebuildSrcDir);
+  possibleArtifactDirs.push(path.join(parentDir, 'LayerBuildArtifact'));
+  
+  // 4. Fallbacks
+  possibleArtifactDirs.push(codebuildSrcDir);
+  possibleArtifactDirs.push(ARTIFACT_DIR);
   
   let foundArchive = null;
   
