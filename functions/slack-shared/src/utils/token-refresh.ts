@@ -1,4 +1,4 @@
-import { getDynamoDb, GetCommand, dynamoDeleteItem, dynamoGetById } from "./dynamodb-utils";
+import { getDynamoDb, getCommands, dynamoDeleteItem, dynamoGetById } from "./dynamodb-utils";
 import { getFromCache, setInCache, hasInCache, removeFromCache } from "./cache";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { OAuthTokenItem, RefreshTokenResponse } from "../config/types";
@@ -94,7 +94,8 @@ export async function updateOAuthToken(
   tableName: string,
   tokenItem: OAuthTokenItem
 ): Promise<void> {
-  await getDynamoDb().send(
+  const db = await getDynamoDb();
+  await db.send(
     new PutCommand({
       TableName: tableName,
       Item: tokenItem,
