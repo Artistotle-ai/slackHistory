@@ -13,6 +13,7 @@ import {
   ChannelTopicEvent,
   ChannelConvertToPrivateEvent,
   ChannelConvertToPublicEvent,
+  FileSharedEvent,
 } from "mnemosyne-slack-shared";
 import { getMessageChannelId } from "mnemosyne-slack-shared";
 import * as messageHandlers from "./handlers/message-handlers";
@@ -154,6 +155,14 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
         if (channelId) {
           await channelHandlers.handleChannelVisibilityChange(channelEvent, teamId, channelId, "public");
         }
+        return;
+      }
+
+      case "file_shared": {
+        const fileEvent = event as FileSharedEvent;
+        // file_shared events are logged but not stored separately
+        // Files are already captured via message.files field
+        console.log(`File shared event: file_id=${fileEvent.file_id}, channel_id=${fileEvent.channel_id || 'N/A'}`);
         return;
       }
     }

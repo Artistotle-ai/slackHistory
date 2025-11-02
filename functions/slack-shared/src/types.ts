@@ -44,6 +44,7 @@ export type StrictSlackEvent =
   | ChannelTopicEvent
   | ChannelConvertToPrivateEvent
   | ChannelConvertToPublicEvent
+  | FileSharedEvent
   | UnknownEvent;
 
 /**
@@ -163,6 +164,14 @@ export interface ChannelConvertToPrivateEvent extends BaseSlackEvent {
 export interface ChannelConvertToPublicEvent extends BaseSlackEvent {
   type: "channel_convert_to_public";
   channel: string;
+}
+
+export interface FileSharedEvent extends BaseSlackEvent {
+  type: "file_shared";
+  file_id: string;
+  user_id?: string;
+  file?: SlackFile;
+  channel_id?: string;
 }
 
 export interface UnknownEvent {
