@@ -120,20 +120,27 @@ function setupLambdasEnv() {
   const parentDir = path.dirname(codebuildSrcDir);
   possibleArtifactDirs.push(path.join(parentDir, 'LayerBuildArtifact'));
   
-  // 4. Check sibling directories in parent (CodePipeline might extract extraInputs here)
+  // 4. Check sibling directories in parent (CodePipeline extracts extraInputs as siblings of src)
+  // CODEBUILD_SRC_DIR = /codebuild/output/src3024862808/src (Git source)
+  // extraInputs are in siblings like: /codebuild/output/src3024862808/Artifact_Layer_Build_Deploy
   try {
     const siblings = fs.readdirSync(parentDir, { withFileTypes: true });
+    console.log(`\nSibling directories of ${parentDir}:`);
     siblings.forEach(entry => {
       if (entry.isDirectory()) {
         const siblingPath = path.join(parentDir, entry.name);
-        // Check if it looks like an artifact directory
+        console.log(`  Found sibling dir: ${entry.name} -> ${siblingPath}`);
+        // Check if it looks like an artifact directory (contains Layer, Artifact, or isn't src)
         if (entry.name.includes('Layer') || entry.name.includes('Artifact') || entry.name !== 'src') {
           possibleArtifactDirs.push(siblingPath);
+          console.log(`    Added to search list: ${siblingPath}`);
         }
+      } else if (entry.isFile()) {
+        console.log(`  Found sibling file: ${entry.name}`);
       }
     });
   } catch (e) {
-    // Ignore errors
+    console.error(`  Could not list siblings: ${e.message}`);
   }
   
   // 5. Check if parent directory itself contains artifacts (some CodePipeline versions do this)
