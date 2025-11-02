@@ -4,9 +4,7 @@ import * as cdk from 'aws-cdk-lib';
 import { BaseRolesStack } from '../lib/base-roles-stack';
 import { MainInfraStack } from '../lib/main-infra-stack';
 import { PipelineInfraStack } from '../lib/pipeline-infra-stack';
-import { PipelineListenerStack } from '../lib/pipeline-listener-stack';
-import { PipelineDdbStreamStack } from '../lib/pipeline-ddb-stream-stack';
-import { PipelineOAuthCallbackStack } from '../lib/pipeline-oauth-callback-stack';
+import { PipelineLambdasStack } from '../lib/pipeline-lambdas-stack';
 
 const app = new cdk.App();
 
@@ -41,6 +39,8 @@ mainInfraStack.addDependency(baseRolesStack);
 
 // Pipeline stacks - CI/CD automation
 // All depend on BaseRolesStack for GitHub connection ARN and artifact bucket
+
+// Infrastructure pipeline - separate from Lambda pipelines
 const pipelineInfraStack = new PipelineInfraStack(app, `${appPrefix}PipelineInfraStack`, {
   env,
   appPrefix,
@@ -48,26 +48,11 @@ const pipelineInfraStack = new PipelineInfraStack(app, `${appPrefix}PipelineInfr
 });
 pipelineInfraStack.addDependency(baseRolesStack);
 
-const pipelineListenerStack = new PipelineListenerStack(app, `${appPrefix}PipelineListenerStack`, {
+// Unified Lambda pipeline - builds all lambdas sequentially (message-listener, file-processor, oauth-callback)
+const pipelineLambdasStack = new PipelineLambdasStack(app, `${appPrefix}PipelineLambdasStack`, {
   env,
   appPrefix,
-  description: 'Mnemosyne: CI/CD pipeline for message-listener Lambda function',
+  description: 'Mnemosyne: Unified CI/CD pipeline for all Lambda functions',
 });
-pipelineListenerStack.addDependency(baseRolesStack);
-pipelineListenerStack.addDependency(mainInfraStack); // Needs Lambda to exist
-
-const pipelineDdbStreamStack = new PipelineDdbStreamStack(app, `${appPrefix}PipelineDdbStreamStack`, {
-  env,
-  appPrefix,
-  description: 'Mnemosyne: CI/CD pipeline for file-processor Lambda function',
-});
-pipelineDdbStreamStack.addDependency(baseRolesStack);
-pipelineDdbStreamStack.addDependency(mainInfraStack); // Needs Lambda to exist
-
-const pipelineOAuthCallbackStack = new PipelineOAuthCallbackStack(app, `${appPrefix}PipelineOAuthCallbackStack`, {
-  env,
-  appPrefix,
-  description: 'Mnemosyne: CI/CD pipeline for oauth-callback Lambda function',
-});
-pipelineOAuthCallbackStack.addDependency(baseRolesStack);
-pipelineOAuthCallbackStack.addDependency(mainInfraStack); // Needs Lambda to exist
+pipelineLambdasStack.addDependency(baseRolesStack);
+pipelineLambdasStack.addDependency(mainInfraStack); // Needs Lambda functions to exist

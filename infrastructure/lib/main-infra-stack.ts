@@ -3,8 +3,10 @@ import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambda_event_sources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { BaseRolesStack } from './base-roles-stack';
 
 export interface MainInfraStackProps extends cdk.StackProps {
@@ -46,6 +48,8 @@ export class MainInfraStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // TODO: Change to RETAIN for production
+      // Enable DynamoDB stream for file-processor Lambda (NEW_AND_OLD_IMAGES for ChannelIndex updates)
+      stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
       //  point-in-time recovery is disabled to avoid costs, it is not needed for this project)
     });
 
@@ -155,6 +159,13 @@ export class MainInfraStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Dead Letter Queue for message-listener Lambda (DynamoDB write errors)
+    const messageListenerDlq = new sqs.Queue(this, 'MessageListenerDLQ', {
+      queueName: `${appPrefix}MessageListenerDLQ`,
+      retentionPeriod: cdk.Duration.days(14), // Retain failed messages for 14 days
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // Message listener Lambda function
     // Code is deployed ONLY via pipeline - using placeholder inline code for initial creation
     this.messageListenerFunction = new lambda.Function(this, 'MessageListenerFunction', {
@@ -167,6 +178,7 @@ export class MainInfraStack extends cdk.Stack {
       role: lambdaExecutionRole,
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
+      deadLetterQueue: messageListenerDlq, // DLQ for DynamoDB write errors
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
         // Import secret ARN from BaseRolesStack exports (deployed first)
@@ -199,6 +211,8 @@ export class MainInfraStack extends cdk.Stack {
       role: lambdaExecutionRole,
       timeout: cdk.Duration.minutes(5), // Longer timeout for file processing
       memorySize: 512,
+      maxEventAge: cdk.Duration.minutes(6), // Max age of event before discarding
+      retryAttempts: 2, // Retry failed invocations
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
         SLACK_FILES_BUCKET: this.slackFilesBucket.bucketName,
@@ -211,7 +225,16 @@ export class MainInfraStack extends cdk.Stack {
       description: 'Deployed via CodePipeline only - do not update manually',
     });
 
-    // TODO: Add DynamoDB stream event source mapping for file processor
+    // DynamoDB stream event source mapping for file processor
+    this.fileProcessorFunction.addEventSource(
+      new lambda_event_sources.DynamoEventSource(this.slackArchiveTable, {
+        startingPosition: lambda.StartingPosition.LATEST,
+        batchSize: 10, // Process up to 10 records per invocation
+        bisectBatchOnError: true, // Split batch on error for retry
+        maxBatchingWindow: cdk.Duration.seconds(5), // Wait up to 5s to batch records
+        reportBatchItemFailures: true, // Report individual failures
+      })
+    );
 
     // OAuth callback Lambda function
     const oauthCallbackFunction = new lambda.Function(this, 'OAuthCallbackFunction', {

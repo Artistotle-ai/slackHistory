@@ -1,5 +1,6 @@
 import { getFromCache, setInCache } from "../utils/cache";
 import { getSecretValue } from "../utils/secrets-utils";
+import { SECRET_CACHE_TTL } from "./settings";
 
 const OAUTH_CREDENTIALS_CACHE_KEY = "oauth_credentials";
 
@@ -78,8 +79,8 @@ export async function getOAuthCredentials(config: OAuthConfig): Promise<OAuthCre
       clientSecret,
     };
 
-    // Cache credentials for 1 hour
-    await setInCache(OAUTH_CREDENTIALS_CACHE_KEY, credentials, 3600);
+    // Cache credentials with configured TTL (same as secrets)
+    await setInCache(OAUTH_CREDENTIALS_CACHE_KEY, credentials, SECRET_CACHE_TTL);
 
     return credentials;
   } catch (error) {
