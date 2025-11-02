@@ -13,8 +13,7 @@ phases:
       - npm --version
   install:
     commands:
-      - echo "PHASE 1: Building all Node.js apps"
-      - echo "Building slack-shared (required by all lambdas)..."
+      - echo Building slack-shared dependency
       - |
         if [ -d "functions/slack-shared" ]; then
           cd functions/slack-shared
@@ -73,7 +72,7 @@ phases:
       
       - echo "All Node.js apps built successfully"
       - echo ""
-      - echo "PHASE 2: Creating deployment packages"
+      - echo "PHASE 2 - Creating deployment packages"
       - echo "Creating package for message-listener..."
       - |
         cd functions/message-listener
@@ -107,7 +106,7 @@ phases:
       
       - echo "All deployment packages created"
       - echo ""
-      - echo "PHASE 3: Deploying Lambda functions"
+      - echo "PHASE 3 - Deploying Lambda functions"
       - echo "Deploying message-listener..."
       - |
         FUNCTION_NAME="${APP_PREFIX}MessageListener"
