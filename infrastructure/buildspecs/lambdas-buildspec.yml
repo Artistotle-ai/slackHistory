@@ -4,41 +4,98 @@ phases:
   install:
     runtime-versions:
       nodejs: 22
-    # Standard images don't support runtime-versions for Node.js 20/22 (only 8, 10, 12)
-    # Check if Node.js is pre-installed, otherwise use amazon-linux-extras or NodeSource
     commands:
-      - node -v  && n 22 && node -v && npm -v
-      - echo "Checking for Node.js..."
-      - node --version || echo "Node.js not found"
-      - |
-        # Always install Node.js 20+ (upgrade if needed)
-        # echo "Current Node.js version: $(node --version 2>/dev/null || echo 'not installed')"
-        # echo "Installing/upgrading to Node.js 20 via NodeSource..."
-        # curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-        # sudo yum install -y nodejs --skip-broken
+      - n 22 
       - node --version
       - npm --version
-      - echo Building slack-shared dependency
+      
+      # PHASE 1 - Build slack-shared as Lambda Layer
+      - echo ""
+      - echo "PHASE 1 - Building slack-shared Lambda Layer"
       - |
         if [ -d "functions/slack-shared" ]; then
           cd functions/slack-shared
           npm ci || npm install
           npm run build || (echo "Build failed!" && exit 1)
           # Tests temporarily disabled in CI - running locally
-          # npm test || true
+          npm test || true
           echo "✓ slack-shared built successfully"
           cd ../..
         else
           echo "ERROR: functions/slack-shared directory not found!"
           exit 1
         fi
+
   build:
     commands:
-      - echo "Building all Lambda functions"
+      # PHASE 2 - Package slack-shared as Lambda Layer
+      - echo ""
+      - echo "PHASE 2 - Packaging slack-shared as Lambda Layer"
+      - |
+        # Create Lambda Layer structure: nodejs/node_modules/mnemosyne-slack-shared
+        # For Node.js layers, structure must be: nodejs/node_modules/<package-name>/
+        mkdir -p build-layer/nodejs/node_modules/mnemosyne-slack-shared
+        
+        # Copy built dist and package.json to layer
+        cp -r functions/slack-shared/dist build-layer/nodejs/node_modules/mnemosyne-slack-shared/
+        cp functions/slack-shared/package.json build-layer/nodejs/node_modules/mnemosyne-slack-shared/
+        
+        # Install production dependencies for slack-shared into layer
+        cd functions/slack-shared
+        npm ci --production || npm install --production
+        # Copy node_modules dependencies to layer (excluding slack-shared itself if present)
+        if [ -d "node_modules" ]; then
+          cp -r node_modules/* build-layer/nodejs/node_modules/mnemosyne-slack-shared/node_modules/ 2>/dev/null || true
+        fi
+        cd ../..
+        
+        # Package the layer
+        cd build-layer
+        zip -rq ../slack-shared-layer.zip nodejs 2>&1 | head -20 || true
+        cd ..
+        echo "✓ slack-shared layer packaged"
+      
+      # PHASE 3 - Deploy Lambda Layer
+      - echo ""
+      - echo "PHASE 3 - Deploying Lambda Layer"
+      - |
+        LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
+        # Check if layer exists, create if not
+        LAYER_ARN=$(aws lambda list-layers --query "Layers[?LayerName=='${LAYER_NAME}'].LatestMatchingVersion.LayerVersionArn" --output text 2>/dev/null || echo "")
+        
+        if [ -z "$LAYER_ARN" ]; then
+          echo "Layer does not exist, creating..."
+          # Create new layer - we'll publish a version in the next step
+          echo "Layer will be created on first publish"
+        fi
+        
+        # Publish new layer version
+        LAYER_VERSION=$(aws lambda publish-layer-version \
+          --layer-name "${LAYER_NAME}" \
+          --description "Shared utilities and types for Mnemosyne Slack functions" \
+          --zip-file fileb://slack-shared-layer.zip \
+          --compatible-runtimes nodejs22 \
+          --compatible-architectures arm64 \
+          --query 'Version' --output text)
+        
+        LAYER_ARN=$(aws lambda get-layer-version \
+          --layer-name "${LAYER_NAME}" \
+          --version-number "${LAYER_VERSION}" \
+          --query 'LayerVersionArn' --output text)
+        
+        echo "✓ Layer version ${LAYER_VERSION} published: ${LAYER_ARN}"
+      
+      # PHASE 4 - Build and deploy each Lambda function
+      - echo ""
+      - echo "PHASE 4 - Building Lambda Functions"
+      
+      # Build message-listener
       - echo "Building message-listener..."
       - |
         if [ -d "functions/message-listener" ]; then
           cd functions/message-listener
+          # Remove slack-shared from node_modules (will come from layer)
+          rm -rf node_modules/mnemosyne-slack-shared || true
           npm ci || npm install
           npm run build || (echo "Build failed!" && exit 1)
           # Tests temporarily disabled in CI - running locally
@@ -50,10 +107,13 @@ phases:
           exit 1
         fi
       
+      # Build file-processor
       - echo "Building file-processor..."
       - |
         if [ -d "functions/file-processor" ]; then
           cd functions/file-processor
+          # Remove slack-shared from node_modules (will come from layer)
+          rm -rf node_modules/mnemosyne-slack-shared || true
           npm ci || npm install
           npm run build || (echo "Build failed!" && exit 1)
           # Tests temporarily disabled in CI - running locally
@@ -65,10 +125,13 @@ phases:
           exit 1
         fi
       
+      # Build oauth-callback
       - echo "Building oauth-callback..."
       - |
         if [ -d "functions/oauth-callback" ]; then
           cd functions/oauth-callback
+          # Remove slack-shared from node_modules (will come from layer)
+          rm -rf node_modules/mnemosyne-slack-shared || true
           npm ci || npm install
           npm run build || (echo "Build failed!" && exit 1)
           # Tests temporarily disabled in CI - running locally
@@ -82,7 +145,11 @@ phases:
       
       - echo "All Node.js apps built successfully"
       - echo ""
-      - echo "PHASE 2 - Creating deployment packages"
+      
+      # PHASE 5 - Package Lambda functions
+      - echo "PHASE 5 - Creating deployment packages"
+      
+      # Package message-listener
       - echo "Creating package for message-listener..."
       - |
         cd functions/message-listener
@@ -97,6 +164,8 @@ phases:
         fi
         cd ../..
         echo "✓ message-listener package created"
+      
+      # Package file-processor
       - echo "Creating package for file-processor..."
       - |
         cd functions/file-processor
@@ -111,6 +180,8 @@ phases:
         fi
         cd ../..
         echo "✓ file-processor package created"
+      
+      # Package oauth-callback
       - echo "Creating package for oauth-callback..."
       - |
         cd functions/oauth-callback
@@ -128,22 +199,72 @@ phases:
       
       - echo "All deployment packages created"
       - echo ""
-      - echo "PHASE 3 - Deploying Lambda functions"
+      
+      # PHASE 6 - Deploy Lambda functions with layer
+      - echo "PHASE 6 - Deploying Lambda functions with layer"
+      
+      # Deploy message-listener
       - echo "Deploying message-listener..."
       - |
         FUNCTION_NAME="${APP_PREFIX}MessageListener"
-        aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://message-listener-function.zip
-        echo "✓ message-listener deployed"
+        # Get latest layer version ARN
+        LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
+        LAYER_ARN=$(aws lambda list-layer-versions \
+          --layer-name "${LAYER_NAME}" \
+          --query 'LayerVersions[0].LayerVersionArn' \
+          --output text)
+        
+        # Update function code
+        aws lambda update-function-code \
+          --function-name "$FUNCTION_NAME" \
+          --zip-file fileb://message-listener-function.zip
+        
+        # Update function configuration to include layer
+        aws lambda update-function-configuration \
+          --function-name "$FUNCTION_NAME" \
+          --layers "$LAYER_ARN"
+        
+        echo "✓ message-listener deployed with layer ${LAYER_ARN}"
+      
+      # Deploy file-processor
       - echo "Deploying file-processor..."
       - |
         FUNCTION_NAME="${APP_PREFIX}FileProcessor"
-        aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://file-processor-function.zip
-        echo "✓ file-processor deployed"
+        LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
+        LAYER_ARN=$(aws lambda list-layer-versions \
+          --layer-name "${LAYER_NAME}" \
+          --query 'LayerVersions[0].LayerVersionArn' \
+          --output text)
+        
+        aws lambda update-function-code \
+          --function-name "$FUNCTION_NAME" \
+          --zip-file fileb://file-processor-function.zip
+        
+        aws lambda update-function-configuration \
+          --function-name "$FUNCTION_NAME" \
+          --layers "$LAYER_ARN"
+        
+        echo "✓ file-processor deployed with layer ${LAYER_ARN}"
+      
+      # Deploy oauth-callback
       - echo "Deploying oauth-callback..."
       - |
         FUNCTION_NAME="${APP_PREFIX}OAuthCallback"
-        aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://oauth-callback-function.zip
-        echo "✓ oauth-callback deployed"
+        LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
+        LAYER_ARN=$(aws lambda list-layer-versions \
+          --layer-name "${LAYER_NAME}" \
+          --query 'LayerVersions[0].LayerVersionArn' \
+          --output text)
+        
+        aws lambda update-function-code \
+          --function-name "$FUNCTION_NAME" \
+          --zip-file fileb://oauth-callback-function.zip
+        
+        aws lambda update-function-configuration \
+          --function-name "$FUNCTION_NAME" \
+          --layers "$LAYER_ARN"
+        
+        echo "✓ oauth-callback deployed with layer ${LAYER_ARN}"
       
       - echo ""
-      - echo "All Lambda functions deployed successfully"
+      - echo "All Lambda functions deployed successfully with shared layer"

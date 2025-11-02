@@ -51,12 +51,13 @@ export class PipelineLambdasStack extends cdk.Stack {
     // Grant S3 permissions
     artifactBucket.grantReadWrite(codeBuildRole);
 
-    // Add Lambda update permissions to CodeBuild role for all Lambda functions
+    // Add Lambda update permissions to CodeBuild role for all Lambda functions and layer
     const lambdaFunctions = [
       `${appPrefix}MessageListener`,
       `${appPrefix}FileProcessor`,
       `${appPrefix}OAuthCallback`,
     ];
+    const layerName = `${appPrefix}SlackSharedLayer`;
 
     codeBuildRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
@@ -64,10 +65,17 @@ export class PipelineLambdasStack extends cdk.Stack {
         'lambda:UpdateFunctionCode',
         'lambda:GetFunction',
         'lambda:UpdateFunctionConfiguration',
+        'lambda:PublishLayerVersion',
+        'lambda:GetLayerVersion',
+        'lambda:ListLayerVersions',
       ],
-      resources: lambdaFunctions.map(name => 
-        `arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:${name}`
-      ),
+      resources: [
+        ...lambdaFunctions.map(name => 
+          `arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:${name}`
+        ),
+        // Layer ARN pattern - allow publishing versions
+        `arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:layer:${layerName}:*`,
+      ],
     }));
 
     // Allow writing build logs to CloudWatch Logs
