@@ -4,7 +4,6 @@
   "description": "Slack history archiving system with Lambda functions",
   "private": true,
   "scripts": {
-    "build:merge-deps": "node infrastructure/scripts/merge-deps.js",
     "build:layer": "node infrastructure/scripts/build-layer.js",
     "build:lambdas": "node infrastructure/scripts/build-lambdas.js",
     "deploy:layer": "node infrastructure/scripts/deploy-layer.js",
@@ -12,7 +11,8 @@
     "setup:lambdas-env": "node infrastructure/scripts/setup-lambdas-env.js"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "package-json-merge": "^1.0.0"
   }
 }
 

@@ -33,7 +33,22 @@ async function buildLayer() {
   
   // Step 2: Merge package.jsons
   console.log('\nStep 2: Merging package.jsons...');
-  run('npm run build:merge-deps');
+  const mergedDepsDir = path.join(PROJECT_ROOT, 'merged-deps');
+  if (!fs.existsSync(mergedDepsDir)) {
+    fs.mkdirSync(mergedDepsDir, { recursive: true });
+  }
+  
+  // Collect all package.json paths
+  const pkgPaths = [
+    path.join(PROJECT_ROOT, 'functions/slack-shared/package.json'),
+    ...['message-listener', 'file-processor', 'oauth-callback'].map(func =>
+      path.join(PROJECT_ROOT, `functions/${func}/package.json`)
+    ).filter(p => fs.existsSync(p))
+  ];
+  
+  // Use package-json-merge utility
+  run(`npx package-json-merge ${pkgPaths.join(' ')} > ${mergedDepsDir}/package.json`);
+  console.log('✓ Dependencies merged');
   
   // Step 3: Install merged dependencies
   console.log('\nStep 3: Installing merged dependencies...');

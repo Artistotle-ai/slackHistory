@@ -2,9 +2,9 @@
 /**
  * Check if files have changed by comparing hashes
  * - Calculates hash of relevant files
- * - Compares with previous hash (stored in S3 or artifact)
- * - Exits with code 0 if no changes (skip build)
- * - Exits with code 1 if changes detected (proceed with build)
+ * - Compares with previous hash (stored in DynamoDB)
+ * - Sets HAS_CHANGES env variable: "true" or "false"
+ * - Always exits 0 (never fails, just sets variable)
  */
 
 const crypto = require('crypto');
@@ -14,8 +14,8 @@ const { execSync } = require('child_process');
 
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
 const BUILD_TYPE = process.env.BUILD_TYPE; // 'infrastructure' or 'layer'
-const ARTIFACT_BUCKET = process.env.ARTIFACT_BUCKET;
 const APP_PREFIX = process.env.APP_PREFIX || 'Mnemosyne';
+const TABLE_NAME = `${APP_PREFIX}BuildHashes`; // Simple DynamoDB table name
 
 function hashDirectory(dir, ignorePatterns = []) {
   if (!fs.existsSync(dir)) {
@@ -62,15 +62,11 @@ function hashDirectory(dir, ignorePatterns = []) {
 }
 
 function getPreviousHash(buildType) {
-  const hashKey = `build-hashes/${APP_PREFIX}-${buildType}-hash.txt`;
-  
-  if (!ARTIFACT_BUCKET) {
-    return null;
-  }
+  const key = `${APP_PREFIX}-${buildType}`;
   
   try {
     const output = execSync(
-      `aws s3 cp s3://${ARTIFACT_BUCKET}/${hashKey} - 2>/dev/null || echo ""`,
+      `aws dynamodb get-item --table-name ${TABLE_NAME} --key '{"buildKey":{"S":"${key}"}}' --query 'Item.hash.S' --output text 2>/dev/null || echo ""`,
       { encoding: 'utf8', cwd: PROJECT_ROOT, stdio: 'pipe' }
     ).trim();
     return output || null;
@@ -80,15 +76,12 @@ function getPreviousHash(buildType) {
 }
 
 function saveHash(buildType, hash) {
-  const hashKey = `build-hashes/${APP_PREFIX}-${buildType}-hash.txt`;
-  
-  if (!ARTIFACT_BUCKET) {
-    return;
-  }
+  const key = `${APP_PREFIX}-${buildType}`;
+  const ttl = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // 7 days TTL
   
   try {
     execSync(
-      `echo "${hash}" | aws s3 cp - s3://${ARTIFACT_BUCKET}/${hashKey}`,
+      `aws dynamodb put-item --table-name ${TABLE_NAME} --item '{"buildKey":{"S":"${key}"},"hash":{"S":"${hash}"},"ttl":{"N":"${ttl}"}}'`,
       { encoding: 'utf8', cwd: PROJECT_ROOT, stdio: 'pipe' }
     );
   } catch (e) {
@@ -113,6 +106,21 @@ function main() {
     directory = path.join(PROJECT_ROOT, 'functions/slack-shared');
     currentHash = hashDirectory(directory, ['node_modules', 'dist']);
     console.log(`=== Checking layer changes ===`);
+  } else if (BUILD_TYPE === 'lambdas') {
+    // Hash all lambda function directories
+    const lambdaDirs = ['message-listener', 'file-processor', 'oauth-callback'];
+    const hash = crypto.createHash('sha256');
+    
+    console.log(`=== Checking lambdas changes ===`);
+    for (const lambdaDir of lambdaDirs) {
+      const fullPath = path.join(PROJECT_ROOT, `functions/${lambdaDir}`);
+      if (fs.existsSync(fullPath)) {
+        const dirHash = hashDirectory(fullPath, ['node_modules', 'dist']);
+        hash.update(dirHash);
+        console.log(`  - ${lambdaDir}: ${dirHash.substring(0, 8)}...`);
+      }
+    }
+    currentHash = hash.digest('hex');
   } else {
     console.error(`ERROR: Unknown BUILD_TYPE: ${BUILD_TYPE}`);
     process.exit(1);
@@ -121,24 +129,31 @@ function main() {
   console.log(`Current hash: ${currentHash.substring(0, 8)}...`);
   
   const previousHash = getPreviousHash(BUILD_TYPE);
+  let hasChanges = true;
   
   if (previousHash) {
     console.log(`Previous hash: ${previousHash.substring(0, 8)}...`);
-    
-    if (currentHash === previousHash) {
-      console.log(`✓ No changes detected - skipping build`);
-      saveHash(BUILD_TYPE, currentHash); // Update timestamp
-      process.exit(0); // Exit 0 = skip build
-    } else {
-      console.log(`✗ Changes detected - proceeding with build`);
-      saveHash(BUILD_TYPE, currentHash);
-      process.exit(1); // Exit 1 = proceed with build
-    }
+    hasChanges = currentHash !== previousHash;
   } else {
-    console.log(`No previous hash found - first build, proceeding...`);
-    saveHash(BUILD_TYPE, currentHash);
-    process.exit(1); // Exit 1 = proceed with build
+    console.log(`No previous hash found - first build`);
+    hasChanges = true;
   }
+  
+  // Save hash (always update)
+  saveHash(BUILD_TYPE, currentHash);
+  
+  // Set environment variable for buildspec
+  const hasChangesValue = hasChanges ? 'true' : 'false';
+  console.log(`HAS_CHANGES=${hasChangesValue}`);
+  console.log(`::set-output name=HAS_CHANGES::${hasChangesValue}`); // GitHub Actions style (doesn't hurt)
+  
+  // Write to file for buildspec to source
+  const envFile = path.join(PROJECT_ROOT, 'build-changes.env');
+  fs.writeFileSync(envFile, `HAS_CHANGES=${hasChangesValue}\n`);
+  console.log(`✓ Hash check complete - HAS_CHANGES=${hasChangesValue}`);
+  
+  // Always exit 0 - never fail, just set variable
+  process.exit(0);
 }
 
 main();

@@ -12,11 +12,28 @@ phases:
 
   pre_build:
     commands:
-      - node infrastructure/scripts/setup-lambdas-env.js
-      - export LAYER_ARN="${LAYER_ARN}"
+      - echo "=== Checking for lambda changes ==="
+      - BUILD_TYPE=lambdas node infrastructure/scripts/check-changes.js
+      - source build-changes.env
+      - echo "HAS_CHANGES=${HAS_CHANGES}"
+      - |
+        if [ "${HAS_CHANGES}" = "false" ]; then
+          echo "No changes detected - skipping lambda builds"
+          exit 0
+        else
+          echo "Changes detected - proceeding with build"
+          node infrastructure/scripts/setup-lambdas-env.js
+          export LAYER_ARN="${LAYER_ARN}"
+        fi
 
   build:
     commands:
+      - source build-changes.env || true
+      - |
+        if [ "${HAS_CHANGES:-true}" = "false" ]; then
+          echo "Skipping build phase - no changes"
+          exit 0
+        fi
       - npm run build:lambdas
       - npm run deploy:lambdas
 

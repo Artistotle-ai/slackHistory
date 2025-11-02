@@ -13,17 +13,26 @@ phases:
   pre_build:
     commands:
       - echo "=== Checking for infrastructure changes ==="
+      - BUILD_TYPE=infrastructure node infrastructure/scripts/check-changes.js
+      - source build-changes.env
+      - echo "HAS_CHANGES=${HAS_CHANGES}"
       - |
-        if BUILD_TYPE=infrastructure node infrastructure/scripts/check-changes.js; then
+        if [ "${HAS_CHANGES}" = "false" ]; then
           echo "No changes detected - skipping infrastructure build"
           exit 0
         else
           echo "Changes detected - proceeding with build"
+          cd infrastructure && npm ci || npm install
         fi
-      - cd infrastructure && npm ci || npm install
 
   build:
     commands:
+      - source build-changes.env || true
+      - |
+        if [ "${HAS_CHANGES:-true}" = "false" ]; then
+          echo "Skipping build phase - no changes"
+          exit 0
+        fi
       - |
         cd infrastructure
         npm run build || true

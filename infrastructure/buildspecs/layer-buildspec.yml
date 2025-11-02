@@ -13,15 +13,26 @@ phases:
   pre_build:
     commands:
       - echo "=== Checking for layer changes ==="
+      - BUILD_TYPE=layer node infrastructure/scripts/check-changes.js
+      - source build-changes.env
+      - echo "HAS_CHANGES=${HAS_CHANGES}"
       - |
-        if BUILD_TYPE=layer node infrastructure/scripts/check-changes.js; then
+        if [ "${HAS_CHANGES}" = "false" ]; then
           echo "No changes detected - skipping layer build"
           exit 0
+        else
+          echo "Changes detected - proceeding with build"
+          cd functions/slack-shared && npm ci || npm install && cd ../..
         fi
-      - cd functions/slack-shared && npm ci || npm install && cd ../..
 
   build:
     commands:
+      - source build-changes.env || true
+      - |
+        if [ "${HAS_CHANGES:-true}" = "false" ]; then
+          echo "Skipping build phase - no changes"
+          exit 0
+        fi
       - npm run build:layer
 
 artifacts:

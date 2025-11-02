@@ -135,6 +135,11 @@ export class PipelineInfraStack extends cdk.Stack {
           }),
         },
       },
+      environmentVariables: {
+        APP_PREFIX: {
+          value: appPrefix,
+        },
+      },
     });
 
     // CodePipeline for infrastructure deployment

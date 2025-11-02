@@ -94,6 +94,18 @@ export class PipelineLambdasStack extends cdk.Stack {
       ],
     }));
 
+    // DynamoDB permissions for build hash change detection
+    codeBuildRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+      ],
+      resources: [
+        `arn:aws:dynamodb:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:table:${appPrefix}BuildHashes`,
+      ],
+    }));
+
     // Infrastructure build project - builds CDK infrastructure
     const infraBuildProject = new codebuild.PipelineProject(this, 'InfrastructureBuildProject', {
       projectName: `${appPrefix}InfrastructureBuild`,
