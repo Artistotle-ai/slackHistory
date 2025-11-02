@@ -64,4 +64,4 @@ artifacts:
     - 'shared-node-modules.tar.gz'
     - 'layer-arn.env'
     - 'merged-deps/package.json'
-  name: LayerArtifact
+  name: LayerBuildArtifact
