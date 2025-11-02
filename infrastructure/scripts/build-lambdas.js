@@ -31,23 +31,17 @@ function buildLambdas() {
   if (!hasExtractedModules) {
     console.log('\nNode_modules not found in /tmp - checking for artifacts...');
     
-    // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR_<ActionName>
-    // For action "Layer_Build_Deploy", check CODEBUILD_SRC_DIR_Layer_Build_Deploy
-    // For artifact "LayerBuildArtifact", check CODEBUILD_SRC_DIR_LayerBuildArtifact
+    // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR/<ArtifactName>
+    // Artifact name is "LayerBuildArtifact", so check CODEBUILD_SRC_DIR/LayerBuildArtifact
     const codebuildSrcDir = process.env.CODEBUILD_SRC_DIR || PROJECT_ROOT;
     
-    // Try multiple possible env var names (action name vs artifact name)
-    const layerArtifactDir = process.env.CODEBUILD_SRC_DIR_Layer_Build_Deploy ||
-                              process.env.CODEBUILD_SRC_DIR_LayerBuildArtifact || 
-                              process.env.CODEBUILD_SRC_DIR_Artifact_Source_GitHub_Source ||
-                              path.join(codebuildSrcDir, 'LayerBuildArtifact');
+    // Primary location: CODEBUILD_SRC_DIR/LayerBuildArtifact
+    const layerArtifactDir = path.join(codebuildSrcDir, 'LayerBuildArtifact');
     
     const possibleArtifactDirs = [
-      layerArtifactDir, // CODEBUILD_SRC_DIR_LayerBuildArtifact (official location)
-      path.join(codebuildSrcDir, 'LayerBuildArtifact'), // Direct artifact name
-      path.join(codebuildSrcDir, '../LayerBuildArtifact'), // One level up
-      path.join(PROJECT_ROOT, 'LayerBuildArtifact'), // Project root
-      codebuildSrcDir, // Root source directory
+      layerArtifactDir, // CODEBUILD_SRC_DIR/LayerBuildArtifact (standard location)
+      codebuildSrcDir, // Root source directory (fallback)
+      path.join(PROJECT_ROOT, 'LayerBuildArtifact'), // Project root fallback
     ];
     
     // Fallback to project root (local builds)
