@@ -1,65 +1,23 @@
 version: 0.2
-
 phases:
   install:
     runtime-versions:
       nodejs: 20
     commands:
       - n 20
-      - node --version
-      - npm --version
-      - npm install
-
-  pre_build:
-    commands:
-      - echo "=== Checking for infrastructure changes ==="
-      - BUILD_TYPE=infrastructure node infrastructure/scripts/check-changes.js
-      - |
-        ENV_FILE="${CODEBUILD_SRC_DIR:-.}/build-changes.env"
-        if [ -f "${ENV_FILE}" ]; then
-          set -a  # automatically export all variables
-          source "${ENV_FILE}" || . "${ENV_FILE}"
-          set +a
-          echo "Loaded HAS_CHANGES=${HAS_CHANGES} from ${ENV_FILE}"
-        else
-          echo "WARNING: ${ENV_FILE} not found, defaulting to HAS_CHANGES=true"
-          export HAS_CHANGES=true
-        fi
-      - echo "HAS_CHANGES=${HAS_CHANGES}"
-      - |
-        if [ "${HAS_CHANGES}" = "false" ]; then
-          echo "No changes detected - skipping infrastructure build"
-          exit 0
-        else
-          echo "Changes detected - proceeding with build"
-          cd infrastructure && npm ci || npm install
-        fi
-
+      - npm install -g aws-cdk
   build:
     commands:
-      - |
-        ENV_FILE="${CODEBUILD_SRC_DIR:-.}/build-changes.env"
-        if [ -f "${ENV_FILE}" ]; then
-          set -a
-          source "${ENV_FILE}" || . "${ENV_FILE}"
-          set +a
-        fi
-      - |
-        if [ "${HAS_CHANGES:-true}" = "false" ]; then
-          echo "Skipping build phase - no changes"
-          exit 0
-        fi
-      - |
-        cd infrastructure
-        npm run build || true
-        npx cdk synth
-
+      - cd infrastructure
+      - npm ci
+      - npm run build
+      - npx cdk synth --quiet
+      - npx cdk deploy --all --require-approval never --outputs-file outputs.json
 cache:
   key: infra-$(codebuild-hash-files infrastructure/package-lock.json infrastructure/package.json)
   paths:
-    - 'infrastructure/node_modules/**/*'
-
+    - "infrastructure/node_modules/**/*"
 artifacts:
   files:
-    - 'infrastructure/cdk.out/**/*'
+    - "infrastructure/cdk.out/**/*"
   name: InfrastructureArtifact
