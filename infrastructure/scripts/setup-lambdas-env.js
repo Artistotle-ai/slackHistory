@@ -103,7 +103,26 @@ function setupLambdasEnv() {
   const parentDir = path.dirname(codebuildSrcDir);
   possibleArtifactDirs.push(path.join(parentDir, 'LayerBuildArtifact'));
   
-  // 4. Fallbacks
+  // 4. Check sibling directories in parent (CodePipeline might extract extraInputs here)
+  try {
+    const siblings = fs.readdirSync(parentDir, { withFileTypes: true });
+    siblings.forEach(entry => {
+      if (entry.isDirectory()) {
+        const siblingPath = path.join(parentDir, entry.name);
+        // Check if it looks like an artifact directory
+        if (entry.name.includes('Layer') || entry.name.includes('Artifact') || entry.name !== 'src') {
+          possibleArtifactDirs.push(siblingPath);
+        }
+      }
+    });
+  } catch (e) {
+    // Ignore errors
+  }
+  
+  // 5. Check if parent directory itself contains artifacts (some CodePipeline versions do this)
+  possibleArtifactDirs.push(parentDir);
+  
+  // 6. Fallbacks
   possibleArtifactDirs.push(codebuildSrcDir);
   possibleArtifactDirs.push(ARTIFACT_DIR);
   
