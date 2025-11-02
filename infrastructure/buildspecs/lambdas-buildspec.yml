@@ -2,27 +2,10 @@ version: 0.2
 
 phases:
   install:
-    # Install Node.js 20 via yum (Amazon Linux 2023 package manager)
-    # First check if Node.js is already installed, if not install Node.js 20
-    # This avoids GLIBC compatibility issues with nvm-installed binaries
-    # Lambda runtime still uses Node.js 22 (NODEJS_22_X) - build environment and runtime are separate
+    runtime-versions:
+      nodejs: 20
     commands:
-      - echo "Checking for Node.js installation..."
-      - node --version || echo "Node.js not found, installing..."
-      - |
-        if ! command -v node &> /dev/null; then
-          echo "Installing Node.js 20 via yum (Amazon Linux 2023 package manager)"
-          # Try enabling NodeSource repository for Node.js 20
-          curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - || true
-          # Install Node.js 20 via yum
-          sudo yum install -y nodejs || sudo yum install -y nodejs20 || (echo "Node.js installation failed, trying alternative method" && exit 1)
-        fi
       - node --version
-      - npm --version || echo "npm not found, installing..."
-      - |
-        if ! command -v npm &> /dev/null; then
-          sudo yum install -y npm || echo "npm installation failed"
-        fi
       - npm --version
       - echo Building slack-shared dependency
       - |
