@@ -2,11 +2,22 @@ version: 0.2
 
 phases:
   install:
-    runtime-versions:
-      nodejs: 20
+    # Standard images don't support runtime-versions for Node.js 20/22 (only 8, 10, 12)
+    # Check if Node.js is pre-installed, otherwise use amazon-linux-extras or NodeSource
     commands:
+      - echo "Checking for Node.js..."
+      - node --version || echo "Node.js not found"
+      - |
+        if ! command -v node &> /dev/null; then
+          echo "Installing Node.js via amazon-linux-extras..."
+          # Try amazon-linux-extras first (if available on AL2023)
+          sudo amazon-linux-extras install nodejs20 -y || sudo amazon-linux-extras install nodejs18 -y || \
+          (echo "amazon-linux-extras not available, trying NodeSource..." && \
+           curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - && \
+           sudo yum install -y nodejs)
+        fi
       - node --version
-      - npm --version
+      - npm --version || (sudo yum install -y npm && npm --version)
       - echo Building slack-shared dependency
       - |
         if [ -d "functions/slack-shared" ]; then
