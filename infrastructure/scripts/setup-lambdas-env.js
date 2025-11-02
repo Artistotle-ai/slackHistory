@@ -32,9 +32,13 @@ function setupLambdasEnv() {
   console.log('=== Setting up Lambda functions environment ===');
   
   // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR_<ArtifactName>
-  // Try multiple possible locations
+  // For artifact named "LayerBuildArtifact", check CODEBUILD_SRC_DIR_LayerBuildArtifact
   const codebuildSrcDir = process.env.CODEBUILD_SRC_DIR || PROJECT_ROOT;
+  const layerArtifactDir = process.env.CODEBUILD_SRC_DIR_LayerBuildArtifact || 
+                            path.join(codebuildSrcDir, 'LayerBuildArtifact');
+  
   const possibleArtifactDirs = [
+    layerArtifactDir, // CODEBUILD_SRC_DIR_LayerBuildArtifact (official location)
     path.join(codebuildSrcDir, 'LayerBuildArtifact'), // Direct artifact name
     path.join(codebuildSrcDir, '../LayerBuildArtifact'), // One level up
     ARTIFACT_DIR, // Original path

@@ -32,9 +32,13 @@ function buildLambdas() {
     console.log('\nNode_modules not found in /tmp - checking for artifacts...');
     
     // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR_<ArtifactName>
-    // Try multiple possible locations
+    // For artifact named "LayerBuildArtifact", check CODEBUILD_SRC_DIR_LayerBuildArtifact
     const codebuildSrcDir = process.env.CODEBUILD_SRC_DIR || PROJECT_ROOT;
+    const layerArtifactDir = process.env.CODEBUILD_SRC_DIR_LayerBuildArtifact || 
+                              path.join(codebuildSrcDir, 'LayerBuildArtifact');
+    
     const possibleArtifactDirs = [
+      layerArtifactDir, // CODEBUILD_SRC_DIR_LayerBuildArtifact (official location)
       path.join(codebuildSrcDir, 'LayerBuildArtifact'), // Direct artifact name
       path.join(codebuildSrcDir, '../LayerBuildArtifact'), // One level up
       path.join(PROJECT_ROOT, 'LayerBuildArtifact'), // Project root
@@ -82,17 +86,64 @@ function buildLambdas() {
         run(`mkdir -p ${tmpDir} && tar -xzf ${foundArchive.path} -C ${tmpDir}`);
       }
     } else {
-    
+      // Debug: List all files in common directories to help diagnose
       console.error('ERROR: Shared node_modules archive not found!');
-      console.error('Checked locations:');
+      console.error('Debugging - listing directories:');
+      console.error(`CODEBUILD_SRC_DIR: ${process.env.CODEBUILD_SRC_DIR || 'not set'}`);
+      console.error(`PROJECT_ROOT: ${PROJECT_ROOT}`);
+      
+      // Try to list what's in CODEBUILD_SRC_DIR and check environment variables
+      console.error(`\nEnvironment variables:`);
+      Object.keys(process.env)
+        .filter(key => key.startsWith('CODEBUILD_SRC_DIR'))
+        .forEach(key => {
+          console.error(`  ${key}=${process.env[key]}`);
+        });
+      
+      try {
+        const codebuildSrcDir = process.env.CODEBUILD_SRC_DIR || PROJECT_ROOT;
+        console.error(`\nContents of ${codebuildSrcDir}:`);
+        const srcContents = fs.readdirSync(codebuildSrcDir, { withFileTypes: true });
+        srcContents.forEach(entry => {
+          console.error(`  ${entry.isDirectory() ? 'DIR' : 'FILE'}: ${entry.name}`);
+        });
+      } catch (e) {
+        console.error(`Could not list ${codebuildSrcDir}: ${e.message}`);
+      }
+      
+      // Check if CODEBUILD_SRC_DIR_LayerBuildArtifact exists
+      const layerArtifactEnv = process.env.CODEBUILD_SRC_DIR_LayerBuildArtifact;
+      if (layerArtifactEnv) {
+        try {
+          console.error(`\nContents of CODEBUILD_SRC_DIR_LayerBuildArtifact (${layerArtifactEnv}):`);
+          const artifactContents = fs.readdirSync(layerArtifactEnv, { withFileTypes: true });
+          artifactContents.forEach(entry => {
+            console.error(`  ${entry.isDirectory() ? 'DIR' : 'FILE'}: ${entry.name}`);
+          });
+        } catch (e) {
+          console.error(`Could not list ${layerArtifactEnv}: ${e.message}`);
+        }
+      }
+      
+      // Check parent directories
+      try {
+        const parentDir = path.dirname(PROJECT_ROOT);
+        console.error(`\nContents of parent directory (${parentDir}):`);
+        const parentContents = fs.readdirSync(parentDir, { withFileTypes: true });
+        parentContents.forEach(entry => {
+          console.error(`  ${entry.isDirectory() ? 'DIR' : 'FILE'}: ${entry.name}`);
+        });
+      } catch (e) {
+        console.error(`Could not list parent: ${e.message}`);
+      }
+      
+      console.error('\nChecked locations:');
       possibleArtifactDirs.forEach(dir => {
         console.error(`  - ${path.join(dir, 'shared-node-modules.zip')}`);
         console.error(`  - ${path.join(dir, 'shared-node-modules.tar.gz')}`);
       });
       console.error(`  - ${sharedModulesZip}`);
       console.error(`  - ${sharedModulesTar}`);
-      console.error(`CODEBUILD_SRC_DIR: ${process.env.CODEBUILD_SRC_DIR || 'not set'}`);
-      console.error(`PROJECT_ROOT: ${PROJECT_ROOT}`);
       process.exit(1);
     }
     
