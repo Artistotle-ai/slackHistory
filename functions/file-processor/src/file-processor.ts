@@ -1,8 +1,41 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+// Lazy load AWS SDK and Node.js modules for better cold start performance
+// These heavy dependencies are only loaded when file processing is actually needed
+let s3ClientModule: typeof import('@aws-sdk/client-s3') | null = null;
+let httpModule: typeof import('http') | null = null;
+let httpsModule: typeof import('https') | null = null;
+
 import { getValidBotToken, logger } from 'mnemosyne-slack-shared';
-import * as https from 'https';
-import * as http from 'http';
 import { OAuthConfig } from 'mnemosyne-slack-shared';
+
+/**
+ * Lazy load S3 client module
+ */
+async function getS3Module() {
+  if (!s3ClientModule) {
+    s3ClientModule = await import('@aws-sdk/client-s3');
+  }
+  return s3ClientModule;
+}
+
+/**
+ * Lazy load HTTP module
+ */
+function getHttpModule() {
+  if (!httpModule) {
+    httpModule = require('http') as typeof import('http');
+  }
+  return httpModule;
+}
+
+/**
+ * Lazy load HTTPS module
+ */
+function getHttpsModule() {
+  if (!httpsModule) {
+    httpsModule = require('https') as typeof import('https');
+  }
+  return httpsModule;
+}
 
 /**
  * Stream file from Slack to S3 without loading into memory
@@ -18,14 +51,19 @@ import { OAuthConfig } from 'mnemosyne-slack-shared';
  * @param s3Client - S3 client instance
  * @param contentType - Optional content type (falls back to response header or octet-stream)
  */
-function streamFileFromSlackToS3(
+async function streamFileFromSlackToS3(
   url: string,
   botToken: string,
   s3Key: string,
   bucketName: string,
-  s3Client: S3Client,
+  s3Client: any,
   contentType?: string
 ): Promise<void> {
+  // Lazy load modules when actually needed
+  const s3Module = await getS3Module();
+  const http = getHttpModule();
+  const https = getHttpsModule();
+
   return new Promise((resolve, reject) => {
     // Parse URL to determine protocol (https/http)
     const urlObj = new URL(url);
@@ -59,7 +97,7 @@ function streamFileFromSlackToS3(
       };
 
       // Upload stream to S3
-      s3Client.send(new PutObjectCommand(uploadParams))
+      s3Client.send(new s3Module.PutObjectCommand(uploadParams))
         .then(() => {
           logger.debug(`Successfully uploaded ${s3Key}`);
           resolve();
@@ -132,7 +170,7 @@ export async function processFile(
   ts: string,
   botToken: string,
   bucketName: string,
-  s3Client: S3Client
+  s3Client: any
 ): Promise<string> {
   if (!file.url_private) {
     throw new Error(`File ${file.id} has no url_private - external file, skipping`);
@@ -178,7 +216,7 @@ export async function processMessageFiles(
   item: any,
   oauthConfig: OAuthConfig,
   bucketName: string,
-  s3Client: S3Client,
+  s3Client: any,
   clientId: string,
   clientSecret: string
 ): Promise<{ s3Keys: string[]; failedFiles: Array<{ file: any; error: Error }> }> {

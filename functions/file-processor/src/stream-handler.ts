@@ -1,6 +1,4 @@
 import { DynamoDBStreamEvent, Context } from 'aws-lambda';
-import { unmarshall } from '@aws-sdk/util-dynamodb';
-import { S3Client } from '@aws-sdk/client-s3';
 import { getOAuthCredentials, OAuthConfig, logger } from 'mnemosyne-slack-shared';
 import { processMessageFiles } from './file-processor';
 import { maintainChannelIndex } from './channel-index';
@@ -9,6 +7,16 @@ import {
   markMessageFilesFailed, 
   markMessageFailed 
 } from './dynamodb-updates';
+
+// Lazy load AWS SDK utilities (heavy dependencies)
+let utilDynamoDbModule: typeof import('@aws-sdk/util-dynamodb') | null = null;
+
+async function getUnmarshall() {
+  if (!utilDynamoDbModule) {
+    utilDynamoDbModule = await import('@aws-sdk/util-dynamodb');
+  }
+  return utilDynamoDbModule.unmarshall;
+}
 
 
 /**
@@ -29,7 +37,7 @@ async function processMessageItem(
   item: any,
   oauthConfig: OAuthConfig,
   bucketName: string,
-  s3Client: S3Client,
+  s3Client: any,
   clientId: string,
   clientSecret: string
 ): Promise<void> {
@@ -107,7 +115,7 @@ export async function processStreamRecord(
   record: any,
   oauthConfig: OAuthConfig,
   bucketName: string,
-  s3Client: S3Client,
+  s3Client: any,
   clientId: string,
   clientSecret: string
 ): Promise<void> {
@@ -126,6 +134,9 @@ export async function processStreamRecord(
   // Unmarshall DynamoDB native format to JavaScript objects
   // NewImage: current state of the item
   // OldImage: previous state (only present for MODIFY events)
+  // Lazy load unmarshall when needed
+  const unmarshall = await getUnmarshall();
+  
   const item = record.dynamodb.NewImage 
     ? (unmarshall(record.dynamodb.NewImage) as any)
     : null;

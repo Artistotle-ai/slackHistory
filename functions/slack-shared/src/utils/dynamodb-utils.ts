@@ -1,37 +1,76 @@
-import { DynamoDBDocumentClient, PutCommand, UpdateCommand, QueryCommand, GetCommand, DeleteCommand ,} from "@aws-sdk/lib-dynamodb";
-import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb";
-import { NodeHttpHandler } from "@aws-sdk/node-http-handler";
-import * as http from "http";
-import * as https from "https";
+// Lazy load AWS SDK and Node.js modules for better cold start performance
+// These heavy dependencies are only loaded when DynamoDB operations are actually needed
+let dynamoDbClientModule: typeof import("@aws-sdk/client-dynamodb") | null = null;
+let dynamoDbDocModule: typeof import("@aws-sdk/lib-dynamodb") | null = null;
+let nodeHttpHandlerModule: typeof import("@aws-sdk/node-http-handler") | null = null;
+let httpModule: typeof import("http") | null = null;
+let httpsModule: typeof import("https") | null = null;
+
 import { DYNAMU_MAX_KEY_LENGTH_BYTES} from "../config/settings";
 import { getFromCache, hasInCache, setInCache } from "./cache";
 
 // Create DynamoDB client and document client (singleton pattern with keep-alive)
 // Global variables persist across warm Lambda invocations
-let dynamoDbClient: DynamoDBClient | null = null;
-let dynamoDb: DynamoDBDocumentClient | null = null;
+let dynamoDbClient: any = null;
+let dynamoDb: any = null;
 
-// HTTP agent with keep-alive for connection reuse
-const httpAgent = new http.Agent({
-  keepAlive: true,
-  keepAliveMsecs: 30000, // 30 seconds
-  maxSockets: 50,
-  maxFreeSockets: 10,
-});
+// HTTP agents with keep-alive (lazy loaded)
+let httpAgent: any = null;
+let httpsAgent: any = null;
 
-const httpsAgent = new https.Agent({
-  keepAlive: true,
-  keepAliveMsecs: 30000, // 30 seconds
-  maxSockets: 50,
-  maxFreeSockets: 10,
-});
+/**
+ * Lazy load HTTP agent (only when needed)
+ */
+function getHttpAgent(): any {
+  if (!httpAgent) {
+    if (!httpModule) {
+      httpModule = require("http") as typeof import("http");
+    }
+    httpAgent = new httpModule.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 30000, // 30 seconds
+      maxSockets: 50,
+      maxFreeSockets: 10,
+    });
+  }
+  return httpAgent;
+}
 
-function getDynamoDbClient(): DynamoDBClient {
+/**
+ * Lazy load HTTPS agent (only when needed)
+ */
+function getHttpsAgent(): any {
+  if (!httpsAgent) {
+    if (!httpsModule) {
+      httpsModule = require("https") as typeof import("https");
+    }
+    httpsAgent = new httpsModule.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 30000, // 30 seconds
+      maxSockets: 50,
+      maxFreeSockets: 10,
+    });
+  }
+  return httpsAgent;
+}
+
+/**
+ * Lazy load DynamoDB client (AWS SDK is heavy, only load when needed)
+ */
+async function getDynamoDbClient(): Promise<any> {
   if (!dynamoDbClient) {
-    dynamoDbClient = new DynamoDBClient({
-      requestHandler: new NodeHttpHandler({
-        httpAgent,
-        httpsAgent,
+    // Dynamically import AWS SDK modules (heavy dependencies)
+    if (!dynamoDbClientModule) {
+      dynamoDbClientModule = await import("@aws-sdk/client-dynamodb");
+    }
+    if (!nodeHttpHandlerModule) {
+      nodeHttpHandlerModule = await import("@aws-sdk/node-http-handler");
+    }
+
+    dynamoDbClient = new dynamoDbClientModule.DynamoDBClient({
+      requestHandler: new nodeHttpHandlerModule.NodeHttpHandler({
+        httpAgent: getHttpAgent(),
+        httpsAgent: getHttpsAgent(),
         connectionTimeout: 2000,
         socketTimeout: 2000,
       }),
@@ -42,15 +81,34 @@ function getDynamoDbClient(): DynamoDBClient {
   return dynamoDbClient;
 }
 
-export function getDynamoDb(): DynamoDBDocumentClient {
+/**
+ * Lazy load DynamoDB Document Client (wraps DynamoDB client with convenience methods)
+ */
+export async function getDynamoDb(): Promise<any> {
   if (!dynamoDb) {
-    dynamoDb = DynamoDBDocumentClient.from(getDynamoDbClient());
+    if (!dynamoDbDocModule) {
+      dynamoDbDocModule = await import("@aws-sdk/lib-dynamodb");
+    }
+    const client = await getDynamoDbClient();
+    dynamoDb = dynamoDbDocModule.DynamoDBDocumentClient.from(client);
   }
   return dynamoDb;
 }
 
-// Export commands for use in other modules
-export { GetCommand, PutCommand, UpdateCommand, DeleteCommand, QueryCommand };
+// Export command constructors (lightweight, can be imported statically)
+// These are just class constructors, not the heavy client code
+export async function getCommands() {
+  if (!dynamoDbDocModule) {
+    dynamoDbDocModule = await import("@aws-sdk/lib-dynamodb");
+  }
+  return {
+    GetCommand: dynamoDbDocModule.GetCommand,
+    PutCommand: dynamoDbDocModule.PutCommand,
+    UpdateCommand: dynamoDbDocModule.UpdateCommand,
+    DeleteCommand: dynamoDbDocModule.DeleteCommand,
+    QueryCommand: dynamoDbDocModule.QueryCommand,
+  };
+}
 
 export interface DynamoDBKey {
   itemId: string;
@@ -71,8 +129,10 @@ export async function putItem<T extends Record<string, unknown>>(
   tableName: string,
   item: T
 ): Promise<void> {
-  await getDynamoDb().send(
-    new PutCommand({
+  const db = await getDynamoDb();
+  const commands = await getCommands();
+  await db.send(
+    new commands.PutCommand({
       TableName: tableName,
       Item: item,
     })
@@ -88,8 +148,10 @@ export async function updateItem(
   updateExpression: string,
   expressionAttributeValues: Record<string, unknown>
 ): Promise<void> {
-  await getDynamoDb().send(
-    new UpdateCommand({
+  const db = await getDynamoDb();
+  const commands = await getCommands();
+  await db.send(
+    new commands.UpdateCommand({
       TableName: tableName,
       Key: key,
       UpdateExpression: updateExpression,
@@ -104,8 +166,10 @@ export async function updateItem(
 export async function queryItems<T extends Record<string, unknown>>(
   options: QueryOptions
 ): Promise<T[]> {
-  const result = await getDynamoDb().send(
-    new QueryCommand({
+  const db = await getDynamoDb();
+  const commands = await getCommands();
+  const result = await db.send(
+    new commands.QueryCommand({
       TableName: options.tableName,
       KeyConditionExpression: "itemId = :itemId",
       ExpressionAttributeValues: {
@@ -156,8 +220,10 @@ export async function dynamoGetById<T extends Record<string, unknown>>(
     key.timestamp = dynamoSanitizeKey(sortKey);
   }
 
-  const result = await getDynamoDb().send(
-    new GetCommand({
+  const db = await getDynamoDb();
+  const commands = await getCommands();
+  const result = await db.send(
+    new commands.GetCommand({
       TableName: tableName,
       Key: key,
     })
@@ -173,8 +239,10 @@ export async function dynamoDeleteItem(
   tableName: string,
   key: DynamoDBKey
 ): Promise<void> {
-  await getDynamoDb().send(
-    new DeleteCommand({
+  const db = await getDynamoDb();
+  const commands = await getCommands();
+  await db.send(
+    new commands.DeleteCommand({
       TableName: tableName,
       Key: key,
     })
