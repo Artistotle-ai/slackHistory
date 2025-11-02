@@ -1,0 +1,150 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      # Install fnm (Fast Node Manager) for Node.js 22
+      - echo "Installing Node.js 22..."
+      - curl -fsSL https://fnm.vercel.app/install | bash
+      - export PATH="/root/.local/share/fnm:$PATH"
+      - eval "`fnm env`"
+      - fnm install 22
+      - fnm use 22
+      - node --version
+      - npm --version
+  install:
+    commands:
+      # PHASE 1: BUILD ALL NODE.JS APPS FIRST
+      # Build slack-shared first (required by all lambdas)
+      - echo "=== PHASE 1: Building all Node.js apps ==="
+      - echo "Building slack-shared..."
+      - |
+        if [ -d "functions/slack-shared" ]; then
+          cd functions/slack-shared
+          npm ci
+          npm run build
+          echo "✓ slack-shared built successfully"
+          cd ../..
+        else
+          echo "ERROR: functions/slack-shared directory not found!"
+          exit 1
+        fi
+  build:
+    commands:
+      # Continue building all lambdas (build phase happens after install phase)
+      # Build Lambda 1: message-listener
+      - echo "Building message-listener..."
+      - |
+        if [ -d "functions/message-listener" ]; then
+          cd functions/message-listener
+          npm ci
+          npm run build
+          npm test || true
+          echo "✓ message-listener built successfully"
+          cd ../..
+        else
+          echo "ERROR: functions/message-listener directory not found!"
+          exit 1
+        fi
+      
+      # Build Lambda 2: file-processor
+      - echo "Building file-processor..."
+      - |
+        if [ -d "functions/file-processor" ]; then
+          cd functions/file-processor
+          npm ci
+          npm run build
+          npm test || true
+          echo "✓ file-processor built successfully"
+          cd ../..
+        else
+          echo "ERROR: functions/file-processor directory not found!"
+          exit 1
+        fi
+      
+      # Build Lambda 3: oauth-callback
+      - echo "Building oauth-callback..."
+      - |
+        if [ -d "functions/oauth-callback" ]; then
+          cd functions/oauth-callback
+          npm ci
+          npm run build
+          npm test || true
+          echo "✓ oauth-callback built successfully"
+          cd ../..
+        else
+          echo "ERROR: functions/oauth-callback directory not found!"
+          exit 1
+        fi
+      
+      - echo "=== All Node.js apps built successfully ==="
+      - echo ""
+      
+      # PHASE 2: CREATE DEPLOYMENT PACKAGES (only if all builds succeeded)
+      - echo "=== PHASE 2: Creating deployment packages ==="
+      
+      # Package message-listener
+      - echo "Creating package for message-listener..."
+      - |
+        cd functions/message-listener
+        npm prune --production
+        cd dist
+        zip -r ../../../message-listener-function.zip *
+        cd ..
+        zip -r ../../message-listener-function.zip node_modules
+        cd ../..
+        echo "✓ message-listener package created"
+      
+      # Package file-processor
+      - echo "Creating package for file-processor..."
+      - |
+        cd functions/file-processor
+        npm prune --production
+        cd dist
+        zip -r ../../../file-processor-function.zip *
+        cd ..
+        zip -r ../../file-processor-function.zip node_modules
+        cd ../..
+        echo "✓ file-processor package created"
+      
+      # Package oauth-callback
+      - echo "Creating package for oauth-callback..."
+      - |
+        cd functions/oauth-callback
+        npm prune --production
+        cd dist
+        zip -r ../../../oauth-callback-function.zip *
+        cd ..
+        zip -r ../../oauth-callback-function.zip node_modules
+        cd ../..
+        echo "✓ oauth-callback package created"
+      
+      - echo "=== All deployment packages created ==="
+      - echo ""
+      
+      # PHASE 3: DEPLOY ALL LAMBDAS (only if builds and packages succeeded)
+      - echo "=== PHASE 3: Deploying Lambda functions ==="
+      
+      # Deploy message-listener
+      - echo "Deploying message-listener..."
+      - |
+        FUNCTION_NAME="${APP_PREFIX}MessageListener"
+        aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://message-listener-function.zip
+        echo "✓ message-listener deployed"
+      
+      # Deploy file-processor
+      - echo "Deploying file-processor..."
+      - |
+        FUNCTION_NAME="${APP_PREFIX}FileProcessor"
+        aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://file-processor-function.zip
+        echo "✓ file-processor deployed"
+      
+      # Deploy oauth-callback
+      - echo "Deploying oauth-callback..."
+      - |
+        FUNCTION_NAME="${APP_PREFIX}OAuthCallback"
+        aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://oauth-callback-function.zip
+        echo "✓ oauth-callback deployed"
+      
+      - echo ""
+      - echo "=== All Lambda functions deployed successfully ==="

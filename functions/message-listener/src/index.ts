@@ -73,12 +73,20 @@ export const handler = async (
 
     // Parse event into strict type and route
     const strictEvent = parseEvent(parsedEvent);
-    await routeEvent(strictEvent);
+    try {
+      await routeEvent(strictEvent);
+    } catch (error) {
+      // DynamoDB errors or processing errors - return 500
+      // Slack will retry, but handlers should be idempotent to handle duplicates
+      console.error("Error routing/processing event:", error);
+      return createErrorResponse(500, `Internal Server Error: ${error instanceof Error ? error.message : String(error)}`);
+    }
 
     return createSuccessResponse();
   } catch (error) {
-    // Return 200 to prevent Slack retries (requirements: log errors but avoid duplicates)
-    console.error("Error processing event:", error);
-    return createSuccessResponse();
+    // Unexpected errors (shouldn't happen but handle gracefully)
+    console.error("Unexpected error processing event:", error);
+    // Return 500 for unexpected errors
+    return createErrorResponse(500, `Internal Server Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 };

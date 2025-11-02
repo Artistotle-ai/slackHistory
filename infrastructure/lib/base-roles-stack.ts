@@ -148,5 +148,30 @@ export class BaseRolesStack extends cdk.Stack {
       description: 'Secrets Manager ARN for Slack bot token (deprecated)',
       exportName: `${appPrefix}SlackBotTokenSecretArn`,
     });
+
+    // Export CDK bootstrap role ARNs for use in pipeline stacks
+    // These roles are created by CDK bootstrap and have a standard naming pattern
+    const cdkBootstrapQualifier = 'hnb659fds'; // Standard CDK bootstrap qualifier
+    const cdkFilePublishingRoleArn = `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/cdk-${cdkBootstrapQualifier}-file-publishing-role-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`;
+    const cdkDeployRoleArn = `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/cdk-${cdkBootstrapQualifier}-deploy-role-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`;
+    const cdkLookupRoleArn = `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/cdk-${cdkBootstrapQualifier}-lookup-role-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`;
+
+    new cdk.CfnOutput(this, 'CdkFilePublishingRoleArn', {
+      value: cdkFilePublishingRoleArn,
+      description: 'CDK bootstrap file publishing role ARN',
+      exportName: `${appPrefix}CdkFilePublishingRoleArn`,
+    });
+
+    new cdk.CfnOutput(this, 'CdkDeployRoleArn', {
+      value: cdkDeployRoleArn,
+      description: 'CDK bootstrap deploy role ARN',
+      exportName: `${appPrefix}CdkDeployRoleArn`,
+    });
+
+    new cdk.CfnOutput(this, 'CdkLookupRoleArn', {
+      value: cdkLookupRoleArn,
+      description: 'CDK bootstrap lookup role ARN',
+      exportName: `${appPrefix}CdkLookupRoleArn`,
+    });
   }
 }

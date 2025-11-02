@@ -6,7 +6,7 @@ import { NodeHttpHandler } from "@aws-sdk/node-http-handler";
 import * as http from "http";
 import * as https from "https";
 import { getFromCache, setInCache } from "./cache";
-import { SECRET_CACHE_PREFIX } from "../config/settings";
+import { SECRET_CACHE_PREFIX, SECRET_CACHE_TTL } from "../config/settings";
 
 // Secrets Manager client (singleton pattern with keep-alive)
 // Global variables persist across warm Lambda invocations
@@ -49,7 +49,7 @@ export function getSecretsClient(region: string): SecretsManagerClient {
 
 /**
  * Get secret value from Secrets Manager (with caching)
- * Cache TTL: 1 hour (secrets rarely change)
+ * Cache TTL: 1 hour (secrets rarely change) - configured via SECRET_CACHE_TTL
  */
 export async function getSecretValue(
   secretArn: string,
@@ -75,8 +75,8 @@ export async function getSecretValue(
     throw new Error(`Secret not found in Secrets Manager: ${secretArn}`);
   }
 
-  // Cache for 1 hour (3600 seconds)
-  setInCache(cacheKey, secretString, 3600);
+  // Cache with configured TTL
+  setInCache(cacheKey, secretString, SECRET_CACHE_TTL);
 
   return secretString;
 }

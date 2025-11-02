@@ -51,6 +51,11 @@ export class PipelineInfraStack extends cdk.Stack {
     // Note: During synthesis, this will resolve at deploy time
     const githubConnectionArn = cdk.Fn.importValue(`${appPrefix}GitHubConnectionArn`);
 
+    // Import CDK bootstrap role ARNs from BaseRolesStack exports
+    const cdkFilePublishingRoleArn = cdk.Fn.importValue(`${appPrefix}CdkFilePublishingRoleArn`);
+    const cdkDeployRoleArn = cdk.Fn.importValue(`${appPrefix}CdkDeployRoleArn`);
+    const cdkLookupRoleArn = cdk.Fn.importValue(`${appPrefix}CdkLookupRoleArn`);
+
     // Create IAM role for CodeBuild with all necessary permissions
     const codeBuildRole = new iam.Role(this, 'CdkBuildDeployRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
@@ -83,13 +88,14 @@ export class PipelineInfraStack extends cdk.Stack {
     }));
 
     // Add permission to assume CDK file publishing role for asset publishing
+    // These ARNs are imported from BaseRolesStack exports
     codeBuildRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['sts:AssumeRole'],
       resources: [
-        `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/cdk-hnb659fds-file-publishing-role-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
-        `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/cdk-hnb659fds-deploy-role-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
-        `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/cdk-hnb659fds-lookup-role-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+        cdkFilePublishingRoleArn,
+        cdkDeployRoleArn,
+        cdkLookupRoleArn,
       ],
     }));
 
