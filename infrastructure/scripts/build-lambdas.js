@@ -31,10 +31,15 @@ function buildLambdas() {
   if (!hasExtractedModules) {
     console.log('\nNode_modules not found in /tmp - checking for artifacts...');
     
-    // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR_<ArtifactName>
-    // For artifact named "LayerBuildArtifact", check CODEBUILD_SRC_DIR_LayerBuildArtifact
+    // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR_<ActionName>
+    // For action "Layer_Build_Deploy", check CODEBUILD_SRC_DIR_Layer_Build_Deploy
+    // For artifact "LayerBuildArtifact", check CODEBUILD_SRC_DIR_LayerBuildArtifact
     const codebuildSrcDir = process.env.CODEBUILD_SRC_DIR || PROJECT_ROOT;
-    const layerArtifactDir = process.env.CODEBUILD_SRC_DIR_LayerBuildArtifact || 
+    
+    // Try multiple possible env var names (action name vs artifact name)
+    const layerArtifactDir = process.env.CODEBUILD_SRC_DIR_Layer_Build_Deploy ||
+                              process.env.CODEBUILD_SRC_DIR_LayerBuildArtifact || 
+                              process.env.CODEBUILD_SRC_DIR_Artifact_Source_GitHub_Source ||
                               path.join(codebuildSrcDir, 'LayerBuildArtifact');
     
     const possibleArtifactDirs = [
