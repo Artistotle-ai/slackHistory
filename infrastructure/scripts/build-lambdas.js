@@ -110,10 +110,35 @@ function buildLambdas() {
         break;
       }
       
-      // Also check for any zip or tar.gz files (CodePipeline uses short IDs like o4nKsyj.zip)
-      // Recursively search for archives - CodePipeline may rename them to short identifiers
+      // CodePipeline uses short IDs like o4nKsyj with NO file extension
+      // Recursively search for archives - detect type by magic bytes
+      function detectArchiveType(filePath) {
+        try {
+          const buffer = fs.readFileSync(filePath, { start: 0, length: 4 });
+          // ZIP files start with PK (0x50 0x4B) or 0x50 0x4B 0x03 0x04
+          if (buffer[0] === 0x50 && buffer[1] === 0x4B) {
+            return 'zip';
+          }
+          // GZIP files start with 0x1F 0x8B (tar.gz is gzip-compressed tar)
+          if (buffer[0] === 0x1F && buffer[1] === 0x8B) {
+            return 'tar';
+          }
+          // TAR files (uncompressed) start with various headers, but common is ustar (0x75 0x73 0x74 0x61 0x72)
+          // Check first 263 bytes for tar header (tar header starts at offset 257)
+          if (fs.statSync(filePath).size > 263) {
+            const tarBuffer = fs.readFileSync(filePath, { start: 257, length: 6 });
+            if (tarBuffer.toString('ascii', 0, 5) === 'ustar') {
+              return 'tar';
+            }
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+        return null;
+      }
+      
       function findArchives(dir, depth = 0) {
-        const archives = { zip: [], tar: [] };
+        const archives = { zip: [], tar: [], unknown: [] };
         if (depth > 2) return archives; // Limit recursion depth
         
         try {
@@ -125,11 +150,24 @@ function buildLambdas() {
               const subArchives = findArchives(fullPath, depth + 1);
               archives.zip.push(...subArchives.zip);
               archives.tar.push(...subArchives.tar);
+              archives.unknown.push(...subArchives.unknown);
             } else if (entry.isFile()) {
+              // Check file extension first
               if (entry.name.endsWith('.zip')) {
                 archives.zip.push(fullPath);
               } else if (entry.name.endsWith('.tar.gz') || entry.name.endsWith('.tgz')) {
                 archives.tar.push(fullPath);
+              } else {
+                // No extension - detect by magic bytes (CodePipeline uses short IDs like o4nKsyj)
+                const fileType = detectArchiveType(fullPath);
+                if (fileType === 'zip') {
+                  archives.zip.push(fullPath);
+                } else if (fileType === 'tar') {
+                  archives.tar.push(fullPath);
+                } else {
+                  // Unknown type - might be archive, add to unknown list
+                  archives.unknown.push(fullPath);
+                }
               }
             }
           }
@@ -140,21 +178,27 @@ function buildLambdas() {
       }
       
       const archives = findArchives(artifactDir);
-      console.log(`  Found ${archives.zip.length} zip files, ${archives.tar.length} tar files (searched recursively)`);
+      console.log(`  Found ${archives.zip.length} zip files, ${archives.tar.length} tar files, ${archives.unknown.length} unknown files (searched recursively)`);
       
       // Prefer zip files (smaller, faster)
       if (archives.zip.length > 0) {
         // Prefer expected name if found, otherwise use first
-        const expectedZip = archives.zip.find(f => f.includes('shared-node-modules.zip') || f.endsWith('shared-node-modules.zip'));
+        const expectedZip = archives.zip.find(f => f.includes('shared-node-modules') || path.basename(f).includes('shared-node-modules'));
         const zipToUse = expectedZip || archives.zip[0];
         foundArchive = { type: 'zip', path: zipToUse };
         console.log(`Found zip archive: ${path.basename(zipToUse)} at: ${zipToUse}`);
         break;
       } else if (archives.tar.length > 0) {
-        const expectedTar = archives.tar.find(f => f.includes('shared-node-modules.tar.gz') || f.endsWith('shared-node-modules.tar.gz'));
+        const expectedTar = archives.tar.find(f => f.includes('shared-node-modules') || path.basename(f).includes('shared-node-modules'));
         const tarToUse = expectedTar || archives.tar[0];
         foundArchive = { type: 'tar', path: tarToUse };
         console.log(`Found tar archive: ${path.basename(tarToUse)} at: ${tarToUse}`);
+        break;
+      } else if (archives.unknown.length > 0) {
+        // Try unknown files as zip first (most common)
+        const unknownFile = archives.unknown[0];
+        console.log(`Trying unknown file as zip: ${path.basename(unknownFile)}`);
+        foundArchive = { type: 'zip', path: unknownFile };
         break;
       }
     }
