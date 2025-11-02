@@ -1,18 +1,12 @@
 version: 0.2
 
 phases:
-  pre_build:
+  install:
+    runtime-versions:
+      nodejs: 20
     commands:
-      - echo "Installing Node.js 20 (fnm - Fast Node Manager)..."
-      - curl -fsSL https://fnm.vercel.app/install | bash
-      - export PATH="/root/.local/share/fnm:$PATH"
-      - eval "`fnm env`"
-      - fnm install 20
-      - fnm use 20
       - node --version
       - npm --version
-  install:
-    commands:
       - echo Building slack-shared dependency
       - |
         if [ -d "functions/slack-shared" ]; then
