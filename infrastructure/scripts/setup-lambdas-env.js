@@ -246,21 +246,31 @@ function setupLambdasEnv() {
       foundArchive = { type: 'tar', path: tarToUse };
       console.log(`Found tar archive: ${path.basename(tarToUse)} at: ${tarToUse}`);
       break;
-    } else if (archives.unknown.length > 0) {
-      // Try unknown files as zip first (most common)
-      const unknownFile = archives.unknown[0];
-      console.log(`Trying unknown file as zip: ${path.basename(unknownFile)}`);
-      foundArchive = { type: 'zip', path: unknownFile };
-      break;
-    }
+    // Don't try unknown files - they're likely not archives
+    // If we reach here, the artifact wasn't found
   }
   
+  if (!foundArchive) {
+    console.error('\n❌ ERROR: Layer artifact not found!');
+    console.error('\nPossible reasons:');
+    console.error('1. Layer build stage hasn\'t completed yet');
+    console.error('2. Layer build stage failed');
+    console.error('3. Artifact not created by Layer build');
+    console.error('4. CodePipeline not extracting extraInputs artifact');
+    console.error('\nChecked locations:');
+    possibleArtifactDirs.forEach(dir => {
+      console.error(`  - ${dir}`);
+    });
+    console.error('\n⚠️  Continuing without layer artifact - lambdas will use their own node_modules');
+    return; // Exit gracefully - let lambdas build with their own deps
+  }
+
   if (foundArchive) {
     if (foundArchive.type === 'zip') {
-      console.log('Extracting shared-node-modules.zip...');
+      console.log(`Extracting ${path.basename(foundArchive.path)}...`);
       run(`mkdir -p ${TMP_DIR} && unzip -q ${foundArchive.path} -d ${TMP_DIR}`);
     } else {
-      console.log('Extracting shared-node-modules.tar.gz...');
+      console.log(`Extracting ${path.basename(foundArchive.path)}...`);
       run(`mkdir -p ${TMP_DIR} && tar -xzf ${foundArchive.path} -C ${TMP_DIR}`);
     }
   } else {

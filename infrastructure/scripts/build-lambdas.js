@@ -249,13 +249,8 @@ function buildLambdas() {
         foundArchive = { type: 'tar', path: tarToUse };
         console.log(`Found tar archive: ${path.basename(tarToUse)} at: ${tarToUse}`);
         break;
-      } else if (archives.unknown.length > 0) {
-        // Try unknown files as zip first (most common)
-        const unknownFile = archives.unknown[0];
-        console.log(`Trying unknown file as zip: ${path.basename(unknownFile)}`);
-        foundArchive = { type: 'zip', path: unknownFile };
-        break;
-      }
+      // Don't try unknown files - they're likely not archives
+      // If we reach here, the artifact wasn't found
     }
     
     // Check project root fallback
@@ -269,14 +264,19 @@ function buildLambdas() {
       }
     }
     
-    if (foundArchive) {
+    if (!foundArchive) {
+      console.error('\n❌ ERROR: Layer artifact not found!');
+      console.error('⚠️  Note: This might be expected if the Layer build stage hasn\'t run yet.');
+      console.error('⚠️  Lambdas will build with their own node_modules (may have duplicates).');
+      console.error('\nContinuing build without shared node_modules...\n');
+      // Continue without shared node_modules - lambdas will use their own
+    } else {
       console.log(`Extracting from ${foundArchive.path}...`);
       if (foundArchive.type === 'zip') {
         run(`mkdir -p ${tmpDir} && unzip -q ${foundArchive.path} -d ${tmpDir}`);
       } else {
         run(`mkdir -p ${tmpDir} && tar -xzf ${foundArchive.path} -C ${tmpDir}`);
       }
-    } else {
       // Debug: List all files in common directories to help diagnose
       console.error('ERROR: Shared node_modules archive not found!');
       console.error('Debugging - listing directories:');
@@ -330,12 +330,12 @@ function buildLambdas() {
       
       console.error('\nChecked locations:');
       possibleArtifactDirs.forEach(dir => {
-        console.error(`  - ${path.join(dir, 'shared-node-modules.zip')}`);
-        console.error(`  - ${path.join(dir, 'shared-node-modules.tar.gz')}`);
+        console.error(`  - ${dir}`);
       });
       console.error(`  - ${sharedModulesZip}`);
       console.error(`  - ${sharedModulesTar}`);
-      process.exit(1);
+      console.error('\n⚠️  Continuing build without shared node_modules...\n');
+      // Don't exit - allow build to continue with individual node_modules
     }
     
     if (!fs.existsSync(`${tmpDir}/node_modules`)) {
