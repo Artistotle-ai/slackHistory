@@ -38,6 +38,11 @@ phases:
         npm run build || true
         npx cdk synth
 
+cache:
+  key: infra-$(codebuild-hash-files infrastructure/package-lock.json infrastructure/package.json)
+  paths:
+    - 'infrastructure/node_modules/**/*'
+
 artifacts:
   files:
     - 'infrastructure/cdk.out/**/*'

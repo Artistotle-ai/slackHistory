@@ -37,6 +37,12 @@ phases:
       - npm run build:lambdas
       - npm run deploy:lambdas
 
+cache:
+  key: lambdas-$(codebuild-hash-files package-lock.json package.json functions/message-listener/package.json functions/file-processor/package.json functions/oauth-callback/package.json)
+  paths:
+    - 'node_modules/**/*'
+    - 'functions/*/node_modules/**/*'
+
 artifacts:
   files:
     - 'message-listener-function.zip'
