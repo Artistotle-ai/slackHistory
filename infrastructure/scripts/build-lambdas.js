@@ -130,11 +130,12 @@ function buildLambdas() {
         if (entry.isDirectory()) {
           const siblingPath = path.join(parentDir, entry.name);
           console.log(`  Found sibling dir: ${entry.name} -> ${siblingPath}`);
-          // Check if it looks like an artifact directory (contains Layer, Artifact, or isn't src)
-          if (entry.name.includes('Layer') || entry.name.includes('Artifact') || entry.name !== 'src') {
-            possibleArtifactDirs.push(siblingPath);
-            console.log(`    Added to search list: ${siblingPath}`);
-          }
+        // Check all sibling directories except 'src' (extraInputs are in sibling dirs)
+        // CodePipeline creates directories like: Artifact_Layer_Build_Deploy, Artifact_Source_GitHub_Source, etc.
+        if (entry.name !== 'src') {
+          possibleArtifactDirs.push(siblingPath);
+          console.log(`    Added to search list: ${siblingPath}`);
+        }
         } else if (entry.isFile()) {
           console.log(`  Found sibling file: ${entry.name}`);
         }
