@@ -184,13 +184,9 @@ export class MainInfraStack extends cdk.Stack {
     // so it can be referenced and attached to Lambda functions
     // Pipeline will publish new versions, but the layer name stays the same
     // Use placeholder directory structure (pipeline will publish actual versions)
-    const layerPlaceholderPath = path.join(__dirname, '..', 'layer-placeholder');
     const slackSharedLayer = new lambda.LayerVersion(this, 'SlackSharedLayer', {
       layerVersionName: `${appPrefix}SlackSharedLayer`,
-      code: lambda.Code.fromAsset(layerPlaceholderPath, {
-        // Explicitly exclude .git files and test zips
-        exclude: ['**/.git/**', '**/*.zip', '**/test-layer.zip'],
-      }),
+      code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 503, body: "Lambda not deployed via pipeline" });'),
       compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
       compatibleArchitectures: [lambda.Architecture.ARM_64],
       description: 'Shared utilities and types for Mnemosyne Slack functions - managed by pipeline',
