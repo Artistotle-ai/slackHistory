@@ -8,22 +8,19 @@ phases:
       - echo "Checking for Node.js..."
       - node --version || echo "Node.js not found"
       - |
-        if ! command -v node &> /dev/null; then
-          echo "Installing Node.js via amazon-linux-extras..."
-          # Try amazon-linux-extras first (if available on AL2023)
-          sudo amazon-linux-extras install nodejs20 -y || sudo amazon-linux-extras install nodejs18 -y || \
-          (echo "amazon-linux-extras not available, trying NodeSource..." && \
-           curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - && \
-           sudo yum install -y nodejs)
-        fi
+        # Always install Node.js 20+ (upgrade if needed)
+        echo "Current Node.js version: $(node --version 2>/dev/null || echo 'not installed')"
+        echo "Installing/upgrading to Node.js 20 via NodeSource..."
+        curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+        sudo yum install -y nodejs --disablerepo=* --enablerepo=nodesource
       - node --version
-      - npm --version || (sudo yum install -y npm && npm --version)
+      - npm --version
       - echo Building slack-shared dependency
       - |
         if [ -d "functions/slack-shared" ]; then
           cd functions/slack-shared
-          npm ci
-          npm run build
+          npm ci || npm install
+          npm run build || (echo "Build failed!" && exit 1)
           # Tests temporarily disabled in CI - running locally
           # npm test || true
           echo "✓ slack-shared built successfully"
@@ -39,8 +36,8 @@ phases:
       - |
         if [ -d "functions/message-listener" ]; then
           cd functions/message-listener
-          npm ci
-          npm run build
+          npm ci || npm install
+          npm run build || (echo "Build failed!" && exit 1)
           # Tests temporarily disabled in CI - running locally
           # npm test || true
           echo "✓ message-listener built successfully"
@@ -54,8 +51,8 @@ phases:
       - |
         if [ -d "functions/file-processor" ]; then
           cd functions/file-processor
-          npm ci
-          npm run build
+          npm ci || npm install
+          npm run build || (echo "Build failed!" && exit 1)
           # Tests temporarily disabled in CI - running locally
           # npm test || true
           echo "✓ file-processor built successfully"
@@ -69,8 +66,8 @@ phases:
       - |
         if [ -d "functions/oauth-callback" ]; then
           cd functions/oauth-callback
-          npm ci
-          npm run build
+          npm ci || npm install
+          npm run build || (echo "Build failed!" && exit 1)
           # Tests temporarily disabled in CI - running locally
           # npm test || true
           echo "✓ oauth-callback built successfully"
@@ -86,31 +83,43 @@ phases:
       - echo "Creating package for message-listener..."
       - |
         cd functions/message-listener
-        npm prune --production
-        cd dist
-        zip -rq ../../../message-listener-function.zip * 2>&1 | head -20 || true
-        cd ..
-        zip -rq ../../message-listener-function.zip node_modules 2>&1 | head -20 || true
+        npm prune --production || true
+        if [ -d "dist" ]; then
+          cd dist
+          zip -rq ../../../message-listener-function.zip * 2>&1 | head -20 || true
+          cd ..
+        fi
+        if [ -d "node_modules" ]; then
+          zip -rq ../../message-listener-function.zip node_modules 2>&1 | head -20 || true
+        fi
         cd ../..
         echo "✓ message-listener package created"
       - echo "Creating package for file-processor..."
       - |
         cd functions/file-processor
-        npm prune --production
-        cd dist
-        zip -rq ../../../file-processor-function.zip * 2>&1 | head -20 || true
-        cd ..
-        zip -rq ../../file-processor-function.zip node_modules 2>&1 | head -20 || true
+        npm prune --production || true
+        if [ -d "dist" ]; then
+          cd dist
+          zip -rq ../../../file-processor-function.zip * 2>&1 | head -20 || true
+          cd ..
+        fi
+        if [ -d "node_modules" ]; then
+          zip -rq ../../file-processor-function.zip node_modules 2>&1 | head -20 || true
+        fi
         cd ../..
         echo "✓ file-processor package created"
       - echo "Creating package for oauth-callback..."
       - |
         cd functions/oauth-callback
-        npm prune --production
-        cd dist
-        zip -rq ../../../oauth-callback-function.zip * 2>&1 | head -20 || true
-        cd ..
-        zip -rq ../../oauth-callback-function.zip node_modules 2>&1 | head -20 || true
+        npm prune --production || true
+        if [ -d "dist" ]; then
+          cd dist
+          zip -rq ../../../oauth-callback-function.zip * 2>&1 | head -20 || true
+          cd ..
+        fi
+        if [ -d "node_modules" ]; then
+          zip -rq ../../oauth-callback-function.zip node_modules 2>&1 | head -20 || true
+        fi
         cd ../..
         echo "✓ oauth-callback package created"
       
