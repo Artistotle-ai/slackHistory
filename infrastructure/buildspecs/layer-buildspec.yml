@@ -15,10 +15,14 @@ phases:
       - echo "=== Checking for layer changes ==="
       - BUILD_TYPE=layer node infrastructure/scripts/check-changes.js
       - |
-        if [ -f build-changes.env ]; then
-          . build-changes.env
+        ENV_FILE="build-changes.env"
+        if [ -f "${ENV_FILE}" ]; then
+          set -a  # automatically export all variables
+          . "${ENV_FILE}"
+          set +a
+          echo "Loaded HAS_CHANGES=${HAS_CHANGES} from ${ENV_FILE}"
         else
-          echo "WARNING: build-changes.env not found, defaulting to HAS_CHANGES=true"
+          echo "WARNING: ${ENV_FILE} not found, defaulting to HAS_CHANGES=true"
           export HAS_CHANGES=true
         fi
       - echo "HAS_CHANGES=${HAS_CHANGES}"
@@ -33,7 +37,13 @@ phases:
 
   build:
     commands:
-      - . build-changes.env || true
+      - |
+        ENV_FILE="build-changes.env"
+        if [ -f "${ENV_FILE}" ]; then
+          set -a
+          . "${ENV_FILE}"
+          set +a
+        fi
       - |
         if [ "${HAS_CHANGES:-true}" = "false" ]; then
           echo "Skipping build phase - no changes"
