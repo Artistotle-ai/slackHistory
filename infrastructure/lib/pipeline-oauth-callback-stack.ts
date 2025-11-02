@@ -80,7 +80,7 @@ export class PipelineOAuthCallbackStack extends cdk.Stack {
     }));
 
     // Single CodeBuild project for Lambda build and deploy
-    const project = new codebuild.PipelineProject(this, 'OAuthCallbackBuildDeployProject', {
+    const project = new codebuild.PipelineProject(this, 'LambdaBuildDeployProject', {
       projectName: `${appPrefix}OAuthCallbackBuildDeploy`,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
