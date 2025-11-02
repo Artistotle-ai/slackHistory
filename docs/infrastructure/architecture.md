@@ -8,19 +8,21 @@ AWS serverless architecture for Slack message archival.
 2. **MainInfraStack** - Core application
 3. **PipelineInfraStack** - Infrastructure CI/CD
 4. **PipelineListenerStack** - message-listener CI/CD
-5. **PipelineDdbStreamStack** - file-processor CI/CD
+5. **PipelineOAuthCallbackStack** - oauth-callback CI/CD
+6. **PipelineDdbStreamStack** - file-processor CI/CD
 
 ## BaseRolesStack
 
 **Resources:**
 - S3 bucket: `mnemosyne-artifacts-{account}-{region}`
-- Secrets: `Mnemosyne/slack/bot-token`, `Mnemosyne/slack/signing-secret`
+- Secrets: `Mnemosyne/slack/signing-secret`, `Mnemosyne/slack/client-id`, `Mnemosyne/slack/client-secret`
 - CodeStar GitHub connection: `Mnemosyne-github`
 - IAM role: `MnemosyneCiRole` (CodePipeline permissions)
 
 **Exports:**
-- `MnemosyneSlackBotTokenSecretArn`
 - `MnemosyneSlackSigningSecretArn`
+- `MnemosyneSlackClientIdSecretArn`
+- `MnemosyneSlackClientSecretArn`
 - `MnemosyneGitHubConnectionArn`
 
 ## MainInfraStack
@@ -39,21 +41,10 @@ AWS serverless architecture for Slack message archival.
 
 **Lambda Functions:**
 
-`MnemosyneMessageListener`
-- Runtime: Node.js 22, ARM64
-- Memory: 256 MB
-- Timeout: 30 seconds
-- Trigger: Function URL (public, no auth)
-- Code: Deployed via pipeline (placeholder inline code initially)
-- Logs: `/aws/lambda/MnemosyneMessageListener` (7-day retention)
-
-`MnemosyneFileProcessor`
-- Runtime: Node.js 22, ARM64
-- Memory: 512 MB
-- Timeout: 5 minutes
-- Trigger: DynamoDB stream (not yet configured)
-- Code: Placeholder (not implemented)
-- Logs: `/aws/lambda/MnemosyneFileProcessor` (7-day retention)
+See [Lambda Functions](../lambda-functions/) documentation:
+- [Message Listener](../lambda-functions/message-listener.md) - `MnemosyneMessageListener`
+- [OAuth Callback](../lambda-functions/oauth-callback.md) - `MnemosyneOAuthCallback`
+- [File Processor](../lambda-functions/file-processor.md) - `MnemosyneFileProcessor`
 
 **IAM Role:** `MnemosyneLambdaExecutionRole`
 - DynamoDB: Read/write on `MnemosyneSlackArchive`
@@ -65,7 +56,7 @@ AWS serverless architecture for Slack message archival.
 
 All pipelines:
 - Source: GitHub (main branch, CodeStar connection)
-- Build: CodeBuild ARM (Node.js 22)
+- Build: CodeBuild
 - Artifact storage: S3 artifacts bucket
 - Deployment: Lambda update-function-code
 
@@ -75,24 +66,33 @@ All pipelines:
 - Deploys: All CDK stacks
 
 **PipelineListenerStack**
-- Triggers: Changes to `message-listener/`
+- Triggers: Changes to `functions/message-listener/`
 - Buildspec: `infrastructure/buildspecs/message-listener-buildspec.yml`
 - Deploys: `MnemosyneMessageListener` function code
 
+**PipelineOAuthCallbackStack**
+- Triggers: Changes to `functions/oauth-callback/`
+- Buildspec: `infrastructure/buildspecs/oauth-callback-buildspec.yml`
+- Deploys: `MnemosyneOAuthCallback` function code
+
 **PipelineDdbStreamStack**
-- Triggers: Changes to `file-processor/`
-- Buildspec: Inline in stack definition
+- Triggers: Changes to `functions/file-processor/`
+- Buildspec: `infrastructure/buildspecs/file-processor-buildspec.yml`
 - Deploys: `MnemosyneFileProcessor` function code
 
 ## Event Flow
 
 ```
+OAuth Installation:
+    ↓ GET (redirect)
+MnemosyneOAuthCallback (Function URL)
+    ↓ exchange code for tokens
+DynamoDB (MnemosyneSlackArchive) - store tokens
+
 Slack Events API
     ↓ POST (webhook)
-Lambda Function URL
-    ↓ verify signature
-MnemosyneMessageListener
-    ↓ write event
+MnemosyneMessageListener (Function URL)
+    ↓ verify signature → write event
 DynamoDB (MnemosyneSlackArchive)
     ↓ stream (not configured)
 MnemosyneFileProcessor (not implemented)
@@ -117,5 +117,4 @@ All resources deployed to single region.
 ## References
 
 - [Deployment Guide](./deployment.md)
-- [Cost Optimization](./cost-optimization.md)
 - [Secrets Setup](./secrets-setup.md)

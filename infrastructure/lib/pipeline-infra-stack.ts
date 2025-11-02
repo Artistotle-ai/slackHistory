@@ -117,7 +117,7 @@ export class PipelineInfraStack extends cdk.Stack {
       },
       environment: {
         type: 'ARM_LAMBDA_CONTAINER',
-        computeType: 'BUILD_LAMBDA_1GB',
+        computeType: 'BUILD_LAMBDA_2GB',
         image: 'aws/codebuild/amazonlinux-aarch64-lambda-standard:nodejs22',
         imagePullCredentialsType: 'CODEBUILD',
       },

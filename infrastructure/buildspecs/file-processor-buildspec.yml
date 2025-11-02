@@ -6,20 +6,20 @@ phases:
       nodejs: 22
     commands:
       - echo "Installing dependencies..."
-      - cd file-processor && npm ci
+      - cd functions/file-processor && npm ci
   build:
     commands:
       - echo "Building Lambda function..."
-      - cd file-processor
+      - cd functions/file-processor
       - npm run build
       - echo "Pruning dev dependencies..."
       - npm prune --production
       - echo "Creating zip with proper structure..."
       - cd dist
-      - zip -r ../../file-processor-function.zip *
+      - zip -r ../../../file-processor-function.zip *
       - cd ..
-      - zip -r ../file-processor-function.zip node_modules
-      - cd ..
+      - zip -r ../../file-processor-function.zip node_modules
+      - cd ../..
       - echo "Deploying Lambda function via pipeline..."
       - |
         if [ -z "$FUNCTION_NAME" ]; then

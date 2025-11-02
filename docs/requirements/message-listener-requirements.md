@@ -309,7 +309,3 @@ GSI (ThreadIndex):
 2. **Conditional Writes:** Use where it prevents obviously stale data (e.g., edit overwrites newer edit), but don't over-engineer. Accept some inconsistency.
 
 3. **File Object Size:** Slack file objects contain many scaled image URLs (`thumb_64`, `thumb_360`, etc.). Use whitelist to avoid storing these.
-
----
-
-End.

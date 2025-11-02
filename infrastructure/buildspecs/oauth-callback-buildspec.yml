@@ -14,14 +14,14 @@ phases:
         else
           echo "WARNING: functions/slack-shared directory not found, skipping..."
         fi
-      - echo "Installing dependencies for message-listener..."
+      - echo "Installing dependencies for oauth-callback..."
       - |
-        if [ -d "functions/message-listener" ]; then
-          cd functions/message-listener
+        if [ -d "functions/oauth-callback" ]; then
+          cd functions/oauth-callback
           npm ci
           cd ../..
         else
-          echo "ERROR: functions/message-listener directory not found!"
+          echo "ERROR: functions/oauth-callback directory not found!"
           exit 1
         fi
   build:
@@ -35,31 +35,32 @@ phases:
         else
           echo "WARNING: functions/slack-shared directory not found, skipping build..."
         fi
-      - echo "Building message-listener Lambda function..."
+      - echo "Building oauth-callback Lambda function..."
       - |
-        if [ -d "functions/message-listener" ]; then
-          cd functions/message-listener
+        if [ -d "functions/oauth-callback" ]; then
+          cd functions/oauth-callback
           npm run build
           npm test || true
           cd ../..
         else
-          echo "ERROR: functions/message-listener directory not found!"
+          echo "ERROR: functions/oauth-callback directory not found!"
           exit 1
         fi
       - echo "Creating deployment package..."
-      - cd functions/message-listener
+      - cd functions/oauth-callback
       - echo "Pruning dev dependencies..."
       - npm prune --production
       - echo "Creating zip with proper structure..."
       - cd dist
-      - zip -r ../../../message-listener-function.zip *
+      - zip -r ../../../oauth-callback-function.zip *
       - cd ..
-      - zip -r ../../message-listener-function.zip node_modules
+      - zip -r ../../oauth-callback-function.zip node_modules
       - cd ../..
       - echo "Deploying Lambda function via pipeline..."
       - |
         if [ -z "$FUNCTION_NAME" ]; then
-          FUNCTION_NAME="MnemosyneMessageListener"
+          FUNCTION_NAME="MnemosyneOAuthCallback"
         fi
-        aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://message-listener-function.zip
+        aws lambda update-function-code --function-name "$FUNCTION_NAME" --zip-file fileb://oauth-callback-function.zip
       - echo "Lambda deployment complete"
+

@@ -1,5 +1,5 @@
 import * as crypto from "crypto";
-import { SlackFile, SlackFileMetadata } from "./types";
+import { SlackFile, SlackFileMetadata } from "../types";
 
 /**
  * Verify Slack request signature

@@ -17,7 +17,7 @@ export interface PipelineListenerStackProps extends cdk.StackProps {
  * PipelineListenerStack - CI/CD for message-listener Lambda
  * 
  * Automated deployment pipeline for Slack message listener:
- * - Triggers on changes to message-listener/ folder in main branch
+ * - Triggers on changes to functions/message-listener/ folder in main branch
  * - Uses CodeStar connection for GitHub integration
  * - Single CodeBuild step: npm ci, build, test, deploy Lambda
  * - Updates Lambda function code directly via AWS CLI

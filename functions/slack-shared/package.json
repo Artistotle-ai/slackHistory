@@ -9,7 +9,12 @@
     "test": "jest",
     "watch": "tsc -w"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-secrets-manager": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/node-http-handler": "^3.0.0"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/jest": "^29.5.12",

@@ -6,6 +6,7 @@ import { MainInfraStack } from '../lib/main-infra-stack';
 import { PipelineInfraStack } from '../lib/pipeline-infra-stack';
 import { PipelineListenerStack } from '../lib/pipeline-listener-stack';
 import { PipelineDdbStreamStack } from '../lib/pipeline-ddb-stream-stack';
+import { PipelineOAuthCallbackStack } from '../lib/pipeline-oauth-callback-stack';
 
 const app = new cdk.App();
 
@@ -62,3 +63,11 @@ const pipelineDdbStreamStack = new PipelineDdbStreamStack(app, `${appPrefix}Pipe
 });
 pipelineDdbStreamStack.addDependency(baseRolesStack);
 pipelineDdbStreamStack.addDependency(mainInfraStack); // Needs Lambda to exist
+
+const pipelineOAuthCallbackStack = new PipelineOAuthCallbackStack(app, `${appPrefix}PipelineOAuthCallbackStack`, {
+  env,
+  appPrefix,
+  description: 'Mnemosyne: CI/CD pipeline for oauth-callback Lambda function',
+});
+pipelineOAuthCallbackStack.addDependency(baseRolesStack);
+pipelineOAuthCallbackStack.addDependency(mainInfraStack); // Needs Lambda to exist

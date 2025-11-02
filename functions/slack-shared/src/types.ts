@@ -1,3 +1,5 @@
+import { TOKEN_DEFAULT_TTL } from "./settings";
+
 // Slack Event API types
 export interface SlackEvent {
   type: string;
@@ -22,6 +24,10 @@ export interface SlackEvent {
   [key: string]: any;
 }
 
+export interface cachableElement {
+  isCachable: true;
+  getTtlSeconds(): number | undefined;
+}
 // Strict event type discriminated unions
 export type StrictSlackEvent =
   | UrlVerificationEvent
@@ -40,19 +46,26 @@ export type StrictSlackEvent =
   | ChannelConvertToPublicEvent
   | UnknownEvent;
 
-export interface UrlVerificationEvent {
+/**
+ * Interface for a Slack "url_verification" event.
+ * Used by the Slack Events API to verify that the endpoint URL is valid.
+ * The "challenge" field MUST be present; the "token" field is optional (e.g., for security verification).
+ */
+export interface UrlVerificationEvent extends SlackEvent {
   type: "url_verification";
   challenge: string;
   token?: string;
 }
 
-export interface BaseEvent {
-  type: string;
+
+// Base data interface for all Slack events
+export interface BaseSlackEvent{
+    type: string;
   team_id: string;
   event_ts?: string;
 }
 
-export interface MessageEvent extends BaseEvent {
+export interface MessageEvent extends BaseSlackEvent {
   type: "message";
   subtype?: string;
   channel: string;
@@ -64,7 +77,7 @@ export interface MessageEvent extends BaseEvent {
   files?: SlackFile[];
 }
 
-export interface MessageChangedEvent extends BaseEvent {
+export interface MessageChangedEvent extends BaseSlackEvent {
   type: "message";
   subtype: "message_changed";
   channel: string;
@@ -77,7 +90,7 @@ export interface MessageChangedEvent extends BaseEvent {
   };
 }
 
-export interface MessageDeletedEvent extends BaseEvent {
+export interface MessageDeletedEvent extends BaseSlackEvent {
   type: "message";
   subtype: "message_deleted";
   channel: string;
@@ -85,8 +98,12 @@ export interface MessageDeletedEvent extends BaseEvent {
   deleted_ts: string;
   ts?: string;
 }
-
-export interface ChannelCreatedEvent extends BaseEvent {
+export interface channel{
+  id: string;
+  name: string;
+  is_private?: boolean;
+}
+export interface ChannelCreatedEvent extends BaseSlackEvent {
   type: "channel_created";
   channel: {
     id: string;
@@ -95,7 +112,7 @@ export interface ChannelCreatedEvent extends BaseEvent {
   };
 }
 
-export interface ChannelRenameEvent extends BaseEvent {
+export interface ChannelRenameEvent extends BaseSlackEvent {
   type: "channel_rename";
   channel: {
     id: string;
@@ -103,47 +120,47 @@ export interface ChannelRenameEvent extends BaseEvent {
   };
 }
 
-export interface ChannelDeletedEvent extends BaseEvent {
+export interface ChannelDeletedEvent extends BaseSlackEvent {
   type: "channel_deleted";
   channel: string;
 }
 
-export interface ChannelArchiveEvent extends BaseEvent {
+export interface ChannelArchiveEvent extends BaseSlackEvent {
   type: "channel_archive";
   channel: string;
   user: string;
 }
 
-export interface ChannelUnarchiveEvent extends BaseEvent {
+export interface ChannelUnarchiveEvent extends BaseSlackEvent {
   type: "channel_unarchive";
   channel: string;
   user: string;
 }
 
-export interface ChannelIdChangedEvent extends BaseEvent {
+export interface ChannelIdChangedEvent extends BaseSlackEvent {
   type: "channel_id_changed";
   channel: string;
   previous_channel?: string;
 }
 
-export interface ChannelPurposeEvent extends BaseEvent {
+export interface ChannelPurposeEvent extends BaseSlackEvent {
   type: "channel_purpose";
   channel: string;
   purpose?: string;
 }
 
-export interface ChannelTopicEvent extends BaseEvent {
+export interface ChannelTopicEvent extends BaseSlackEvent {
   type: "channel_topic";
   channel: string;
   topic?: string;
 }
 
-export interface ChannelConvertToPrivateEvent extends BaseEvent {
+export interface ChannelConvertToPrivateEvent extends BaseSlackEvent {
   type: "channel_convert_to_private";
   channel: string;
 }
 
-export interface ChannelConvertToPublicEvent extends BaseEvent {
+export interface ChannelConvertToPublicEvent extends BaseSlackEvent {
   type: "channel_convert_to_public";
   channel: string;
 }
@@ -180,7 +197,7 @@ export interface SlackFile {
 }
 
 // DynamoDB item types
-export interface MessageItem {
+export interface MessageItem extends Record<string, unknown> {
   itemId: string;
   timestamp: string;
   type: "message";
@@ -198,7 +215,7 @@ export interface MessageItem {
   deleted?: boolean;
 }
 
-export interface ChannelItem {
+export interface ChannelItem extends Record<string, unknown> {
   itemId: string;
   timestamp: string;
   type: "channel";
@@ -262,5 +279,26 @@ export interface LambdaFunctionURLResponse {
   headers?: { [key: string]: string };
   body?: string;
   isBase64Encoded?: boolean;
+}
+export interface OAuthTokenItem extends Record<string, unknown> , cachableElement {
+  tableName?: string;
+  itemId: string;
+  timestamp: string;
+  bot_token: string;
+  refresh_token?: string;
+  expires_at?: number;
+  scope?: string;
+  bot_user_id?: string;
+  team_id: string;
+  team_name?: string;
+  ttlSeconds?: number;
+}
+
+export interface RefreshTokenResponse {
+  ok: boolean;
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  error?: string;
 }
 
