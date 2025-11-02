@@ -5,6 +5,6 @@
     "outDir": "./dist",
     "rootDir": "./src"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../node_modules/@aws-cdk/aws-lambda/dist/types/**/*"],
   "exclude": ["node_modules", "dist"]
 }

@@ -11,7 +11,7 @@
     "setup:lambdas-env": "node infrastructure/scripts/setup-lambdas-env.js"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.18.13",
     "merge-package-json": "^0.1.3"
   }
 }

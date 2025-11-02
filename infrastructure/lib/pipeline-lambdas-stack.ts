@@ -107,6 +107,7 @@ export class PipelineLambdasStack extends cdk.Stack {
     }));
 
     // Infrastructure build project - builds CDK infrastructure
+    // Note: No source property - source comes from CodePipeline Action
     const infraBuildProject = new codebuild.PipelineProject(this, 'InfrastructureBuildProject', {
       projectName: `${appPrefix}InfrastructureBuild`,
       environment: {
@@ -114,14 +115,6 @@ export class PipelineLambdasStack extends cdk.Stack {
         computeType: codebuild.ComputeType.SMALL,
         privileged: false,
       },
-      source: codebuild.Source.gitHub({
-        owner: 'Artistotle-ai',
-        repo: 'slackHistory',
-        webhook: true,
-        webhookFilters: [
-          codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andFilePathIs('infrastructure/**'),
-        ],
-      }),
       cache: codebuild.Cache.bucket(artifactBucket, {
         prefix: 'codebuild-cache-infra-build',
       }),
@@ -145,6 +138,7 @@ export class PipelineLambdasStack extends cdk.Stack {
 
     // Build projects - run in parallel
     // 1. Layer build project
+    // Note: No source property - source comes from CodePipeline Action
     const layerBuildProject = new codebuild.PipelineProject(this, 'LayerBuildProject', {
       projectName: `${appPrefix}LayerBuild`,
       environment: {
@@ -154,14 +148,6 @@ export class PipelineLambdasStack extends cdk.Stack {
       },
       cache: codebuild.Cache.bucket(artifactBucket, {
         prefix: 'codebuild-cache-layer-build',
-      }),
-      source: codebuild.Source.gitHub({
-        owner: 'Artistotle-ai',
-        repo: 'slackHistory',
-        webhook: true,
-        webhookFilters: [
-          codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andFilePathIs('functions/slack-shared/**'),
-        ],
       }),
       buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/layer-buildspec.yml'),
       role: codeBuildRole,
@@ -185,6 +171,7 @@ export class PipelineLambdasStack extends cdk.Stack {
     });
 
     // 2. Lambdas build project (builds all 3 functions)
+    // Note: No source property - source comes from CodePipeline Action
     const lambdasBuildProject = new codebuild.PipelineProject(this, 'LambdasBuildProject', {
       projectName: `${appPrefix}LambdasBuild`,
       environment: {
@@ -194,16 +181,6 @@ export class PipelineLambdasStack extends cdk.Stack {
       },
       cache: codebuild.Cache.bucket(artifactBucket, {
         prefix: 'codebuild-cache-lambdas-build',
-      }),
-      source: codebuild.Source.gitHub({
-        owner: 'Artistotle-ai',
-        repo: 'slackHistory',
-        webhook: true,
-        webhookFilters: [
-          codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andFilePathIs('functions/message-listener/**'),
-          codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andFilePathIs('functions/file-processor/**'),
-          codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andFilePathIs('functions/oauth-callback/**'),
-        ],
       }),
       buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/lambdas-buildspec.yml'),
       role: codeBuildRole,

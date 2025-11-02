@@ -9,6 +9,7 @@
     // Use nodenext for moduleResolution with node20 module mode
     // This provides Node.js 20+ module resolution behavior
     "moduleResolution": "nodenext",
+    "types": [],
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
