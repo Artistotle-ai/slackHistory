@@ -7,6 +7,7 @@ export * from "./event-repository";
 export * from "./utils/utils";
 export * from "./utils/cache";
 export * from "./utils/dynamodb-utils";
+export * from "./utils/oauth-config";
 export * from "./utils/request-utils";
 export * from "./utils/secrets-utils";
 export * from "./utils/slack-utils";

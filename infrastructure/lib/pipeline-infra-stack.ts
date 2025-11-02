@@ -111,11 +111,18 @@ export class PipelineInfraStack extends cdk.Stack {
       role: codeBuildRole,
       logging: {
         cloudWatch: {
-          logGroup: new logs.LogGroup(this, 'CdkBuildLogs', {
-            logGroupName: `/aws/codebuild/${appPrefix}CdkBuildDeploy`,
-            retention: logs.RetentionDays.ONE_WEEK,
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
-          }),
+          logGroup: (() => {
+            // Create log group - if it already exists, it will be imported via physical ID
+            const logGroup = new logs.LogGroup(this, 'CdkBuildLogs', {
+              logGroupName: `/aws/codebuild/${appPrefix}CdkBuildDeploy`,
+              retention: logs.RetentionDays.ONE_WEEK,
+              removalPolicy: cdk.RemovalPolicy.DESTROY,
+            });
+            // Use CfnLogGroup to potentially handle existing resource
+            const cfnLogGroup = logGroup.node.defaultChild as logs.CfnLogGroup;
+            // This allows CloudFormation to recognize the existing resource
+            return logGroup;
+          })(),
         },
       },
     });

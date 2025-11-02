@@ -49,8 +49,8 @@ export function getDynamoDb(): DynamoDBDocumentClient {
   return dynamoDb;
 }
 
-// Export GetCommand for use in other modules
-export { GetCommand };
+// Export commands for use in other modules
+export { GetCommand, PutCommand, UpdateCommand, DeleteCommand, QueryCommand };
 
 export interface DynamoDBKey {
   itemId: string;
