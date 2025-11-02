@@ -235,12 +235,30 @@ export class PipelineLambdasStack extends cdk.Stack {
       pipelineType: codepipeline.PipelineType.V2,
     });
 
+    // Source stage - GitHub source via CodeStar connection
+    const sourceOutput = new codepipeline.Artifact('SourceArtifact');
+    const sourceAction = new codepipeline_actions.CodeStarConnectionsSourceAction({
+      actionName: 'GitHub_Source',
+      owner: 'Artistotle-ai',
+      repo: 'slackHistory',
+      branch: 'main',
+      connectionArn: githubConnectionArn,
+      output: sourceOutput,
+      triggerOnPush: true,
+    });
+
+    pipeline.addStage({
+      stageName: 'Source',
+      actions: [sourceAction],
+    });
+
     // Build stage 1 - Infrastructure and Layer build+deploy in parallel
     // Layer build also deploys the layer (outputs node_modules zip + layer ARN)
     const infraBuildOutput = new codepipeline.Artifact('InfrastructureArtifact');
     const infraBuildAction = new codepipeline_actions.CodeBuildAction({
       actionName: 'Infrastructure_Build',
       project: infraBuildProject,
+      input: sourceOutput, // Use source artifact as input
       outputs: [infraBuildOutput],
     });
 
@@ -248,6 +266,7 @@ export class PipelineLambdasStack extends cdk.Stack {
     const layerBuildAction = new codepipeline_actions.CodeBuildAction({
       actionName: 'Layer_Build_Deploy',
       project: layerBuildProject,
+      input: sourceOutput, // Use source artifact as input
       outputs: [layerBuildOutput],
     });
 
@@ -261,6 +280,7 @@ export class PipelineLambdasStack extends cdk.Stack {
     const lambdasBuildAction = new codepipeline_actions.CodeBuildAction({
       actionName: 'Lambdas_Build_Deploy',
       project: lambdasBuildProject,
+      input: sourceOutput, // Primary input (source code)
       extraInputs: [layerBuildOutput], // Carry over merged node_modules zip and layer-arn.env
       outputs: [lambdasBuildOutput],
     });
