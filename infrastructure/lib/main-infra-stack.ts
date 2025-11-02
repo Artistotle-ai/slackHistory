@@ -175,8 +175,9 @@ export class MainInfraStack extends cdk.Stack {
 
     // Export layer ARN for pipeline reference (optional - pipeline can look up by name)
     // For now, pipeline will look up the layer by name, but we export the name for documentation
+    const layerName = `${appPrefix}SlackSharedLayer`;
     new cdk.CfnOutput(this, 'SlackSharedLayerName', {
-      value: slackSharedLayer.layerVersionName || `${appPrefix}SlackSharedLayer`,
+      value: layerName,
       description: 'Lambda Layer name for slack-shared (versions published by pipeline)',
       exportName: `${appPrefix}SlackSharedLayerName`,
     });
