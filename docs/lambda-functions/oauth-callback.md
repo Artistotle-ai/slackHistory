@@ -21,11 +21,13 @@ Handles Slack OAuth installation flow. Exchanges authorization code for bot toke
 
 ## Request Flow
 
-1. Validate query parameters (`code`, `state`)
-2. Retrieve OAuth credentials from Secrets Manager
+1. Validate query parameters (`code`, `state`) - missing → `400 Bad Request`
+2. Retrieve OAuth credentials from Secrets Manager (cached for warm starts)
 3. Exchange code for tokens via `https://slack.com/api/oauth.v2.access`
+   - Invalid code → `401 Unauthorized`
 4. Store tokens in DynamoDB (`itemId = "oauth#{team_id}", timestamp = "1"`)
-5. Return HTML success page
+   - Overwrites existing token (upsert)
+5. Return HTML success page: "Installation complete. Return to Slack."
 
 ## DynamoDB Storage
 
@@ -41,6 +43,13 @@ bot_user_id: "U12345"
 team_id: "T12345"
 team_name: "Workspace Name"
 ```
+
+## Error Handling
+
+- Missing code/state → `400 Bad Request`
+- Invalid code → `401 Unauthorized`
+- DynamoDB write error → `500 Internal Server Error`
+- Secrets Manager read error → `500 Internal Server Error`
 
 ## Permissions
 

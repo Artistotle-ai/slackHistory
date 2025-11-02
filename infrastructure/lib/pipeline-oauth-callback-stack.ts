@@ -109,6 +109,8 @@ export class PipelineOAuthCallbackStack extends cdk.Stack {
         },
       },
     });
+    // Override logical ID to match existing CloudFormation resource (no hash suffix)
+    (project.node.defaultChild as codebuild.CfnProject).overrideLogicalId('LambdaBuildDeployProject');
 
     // CodePipeline for oauth-callback deployment
     const pipeline = new codepipeline.Pipeline(this, 'OAuthCallbackPipeline', {
