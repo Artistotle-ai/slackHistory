@@ -77,7 +77,6 @@ cdk.out/
 **/dist/
 **/build/
 **/coverage/
-infrastructure/lib/*.js
 infrastructure/bin/*.js
 
 # Environment variables
