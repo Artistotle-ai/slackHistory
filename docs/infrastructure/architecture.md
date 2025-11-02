@@ -7,9 +7,7 @@ AWS serverless architecture for Slack message archival.
 1. **BaseRolesStack** - Shared resources
 2. **MainInfraStack** - Core application
 3. **PipelineInfraStack** - Infrastructure CI/CD
-4. **PipelineListenerStack** - message-listener CI/CD
-5. **PipelineOAuthCallbackStack** - oauth-callback CI/CD
-6. **PipelineDdbStreamStack** - file-processor CI/CD
+4. **PipelineLambdasStack** - Unified Lambda functions CI/CD
 
 ## BaseRolesStack
 
@@ -72,20 +70,13 @@ All pipelines:
 - Buildspec: `infrastructure/buildspecs/infrastructure-buildspec.yml`
 - Deploys: All CDK stacks
 
-**PipelineListenerStack**
-- Triggers: Changes to `functions/message-listener/`
-- Buildspec: `infrastructure/buildspecs/message-listener-buildspec.yml`
-- Deploys: `MnemosyneMessageListener` function code
-
-**PipelineOAuthCallbackStack**
-- Triggers: Changes to `functions/oauth-callback/`
-- Buildspec: `infrastructure/buildspecs/oauth-callback-buildspec.yml`
-- Deploys: `MnemosyneOAuthCallback` function code
-
-**PipelineDdbStreamStack**
-- Triggers: Changes to `functions/file-processor/`
-- Buildspec: `infrastructure/buildspecs/file-processor-buildspec.yml`
-- Deploys: `MnemosyneFileProcessor` function code
+**PipelineLambdasStack**
+- Triggers: Changes to `functions/` folder
+- Buildspec: `infrastructure/buildspecs/lambdas-buildspec.yml`
+- Deploys: All Lambda functions sequentially
+  - Builds `slack-shared` as Lambda Layer first
+  - Then builds and deploys: `MnemosyneMessageListener`, `MnemosyneFileProcessor`, `MnemosyneOAuthCallback`
+  - All functions use the shared Lambda Layer
 
 ## Event Flow
 

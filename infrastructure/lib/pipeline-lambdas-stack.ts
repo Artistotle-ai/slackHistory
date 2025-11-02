@@ -68,12 +68,13 @@ export class PipelineLambdasStack extends cdk.Stack {
         'lambda:PublishLayerVersion',
         'lambda:GetLayerVersion',
         'lambda:ListLayerVersions',
+        'lambda:DeleteLayerVersion', // For cleanup of old layer versions
       ],
       resources: [
         ...lambdaFunctions.map(name => 
           `arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:${name}`
         ),
-        // Layer ARN pattern - allow publishing versions
+        // Layer ARN pattern - allow publishing, listing, and deleting versions
         `arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:layer:${layerName}:*`,
       ],
     }));

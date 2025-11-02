@@ -3,9 +3,9 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      nodejs: 22
+      nodejs: 20
     commands:
-      - n 22 
+      - n 20 
       - node --version
       - npm --version
       
@@ -28,26 +28,28 @@ phases:
 
   build:
     commands:
-      # PHASE 0 - Clean up old infrastructure (if needed)
-      - echo ""
-      - echo "PHASE 0 - Cleaning up old infrastructure"
-      - |
-        # Check for old Lambda layer versions (keep only last 5 versions)
-        LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
-        if aws lambda list-layer-versions --layer-name "$LAYER_NAME" --query 'LayerVersions[].Version' --output text >/dev/null 2>&1; then
-          OLD_VERSIONS=$(aws lambda list-layer-versions --layer-name "$LAYER_NAME" --query 'LayerVersions[5:].Version' --output text 2>/dev/null || echo "")
-          if [ -n "$OLD_VERSIONS" ]; then
-            echo "Cleaning up old layer versions: $OLD_VERSIONS"
-            for version in $OLD_VERSIONS; do
-              echo "Deleting layer version: $version"
-              aws lambda delete-layer-version --layer-name "$LAYER_NAME" --version-number "$version" || true
-            done
-          else
-            echo "No old layer versions to clean up"
-          fi
-        else
-          echo "Layer does not exist yet, skipping cleanup"
-        fi
+          # PHASE 0 - Clean up old infrastructure (if needed)
+          - echo ""
+          - echo "PHASE 0 - Cleaning up old infrastructure"
+          - |
+            # Check for old Lambda layer versions (keep only last 5 versions)
+            LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
+            LIST_OUTPUT=$(aws lambda list-layer-versions --layer-name "$LAYER_NAME" --query 'LayerVersions[].Version' --output text 2>&1)
+            LIST_EXIT_CODE=$?
+            if [ $LIST_EXIT_CODE -eq 0 ] && [ -n "$LIST_OUTPUT" ]; then
+              OLD_VERSIONS=$(aws lambda list-layer-versions --layer-name "$LAYER_NAME" --query 'LayerVersions[5:].Version' --output text 2>/dev/null || echo "")
+              if [ -n "$OLD_VERSIONS" ]; then
+                echo "Cleaning up old layer versions: $OLD_VERSIONS"
+                for version in $OLD_VERSIONS; do
+                  echo "Deleting layer version: $version"
+                  aws lambda delete-layer-version --layer-name "$LAYER_NAME" --version-number "$version" || true
+                done
+              else
+                echo "No old layer versions to clean up"
+              fi
+            else
+              echo "Layer does not exist yet or access denied (will be created on first publish)"
+            fi
       
       # PHASE 2 - Package slack-shared as Lambda Layer
       - echo ""
@@ -91,14 +93,14 @@ phases:
         fi
         
         # Publish new layer version
-        # Separate stdout and stderr to properly capture version number
+        # Publish and capture JSON output, then extract version number
         PUBLISH_OUTPUT=$(aws lambda publish-layer-version \
           --layer-name "${LAYER_NAME}" \
           --description "Shared utilities and types for Mnemosyne Slack functions" \
           --zip-file fileb://slack-shared-layer.zip \
-          --compatible-runtimes nodejs22.x \
+          --compatible-runtimes nodejs20.x \
           --compatible-architectures arm64 \
-          --query 'Version' --output text 2>&1)
+          --output json 2>&1)
         
         PUBLISH_EXIT_CODE=$?
         
@@ -108,11 +110,13 @@ phases:
           exit 1
         fi
         
-        LAYER_VERSION="$PUBLISH_OUTPUT"
+        # Extract version number from JSON (handles both JSON and error messages)
+        LAYER_VERSION=$(echo "$PUBLISH_OUTPUT" | grep -oE '"Version"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | head -1)
         
         # Verify layer version is a valid number
         if [ -z "$LAYER_VERSION" ] || ! [[ "$LAYER_VERSION" =~ ^[0-9]+$ ]]; then
-          echo "ERROR: Invalid layer version returned: ${LAYER_VERSION}"
+          echo "ERROR: Invalid layer version returned from publish"
+          echo "Publish output: $PUBLISH_OUTPUT"
           exit 1
         fi
         
@@ -122,9 +126,8 @@ phases:
           --version-number "${LAYER_VERSION}" \
           --query 'LayerVersionArn' --output text 2>&1)
         
-        if [ $? -ne 0 ] || [ -z "$LAYER_ARN" ] || [ "$LAYER_ARN" = "" ]; then
+        if [ $? -ne 0 ] || [ -z "$LAYER_ARN" ]; then
           echo "ERROR: Failed to get layer ARN for version ${LAYER_VERSION}"
-          echo "$LAYER_ARN"
           exit 1
         fi
         
@@ -254,16 +257,21 @@ phases:
         FUNCTION_NAME="${APP_PREFIX}MessageListener"
         # Get latest layer version ARN
         LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
-        LAYER_ARN=$(aws lambda list-layer-versions \
+        LAYER_ARN_OUTPUT=$(aws lambda list-layer-versions \
           --layer-name "${LAYER_NAME}" \
           --max-items 1 \
           --query 'LayerVersions[0].LayerVersionArn' \
           --output text 2>&1)
+        LAYER_EXIT_CODE=$?
         
-        if [ -z "$LAYER_ARN" ] || [ "$LAYER_ARN" = "" ]; then
+        # Validate layer ARN - must start with "arn:aws:" and not be empty
+        if [ $LAYER_EXIT_CODE -ne 0 ] || [ -z "$LAYER_ARN_OUTPUT" ] || [[ ! "$LAYER_ARN_OUTPUT" =~ ^arn:aws: ]]; then
           echo "ERROR: Failed to get latest layer ARN for ${LAYER_NAME}"
+          echo "Exit code: $LAYER_EXIT_CODE"
+          echo "Output: $LAYER_ARN_OUTPUT"
           exit 1
         fi
+        LAYER_ARN="$LAYER_ARN_OUTPUT"
         
         # Update function code
         aws lambda update-function-code \
@@ -282,16 +290,21 @@ phases:
       - |
         FUNCTION_NAME="${APP_PREFIX}FileProcessor"
         LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
-        LAYER_ARN=$(aws lambda list-layer-versions \
+        LAYER_ARN_OUTPUT=$(aws lambda list-layer-versions \
           --layer-name "${LAYER_NAME}" \
           --max-items 1 \
           --query 'LayerVersions[0].LayerVersionArn' \
           --output text 2>&1)
+        LAYER_EXIT_CODE=$?
         
-        if [ -z "$LAYER_ARN" ] || [ "$LAYER_ARN" = "" ]; then
+        # Validate layer ARN - must start with "arn:aws:" and not be empty
+        if [ $LAYER_EXIT_CODE -ne 0 ] || [ -z "$LAYER_ARN_OUTPUT" ] || [[ ! "$LAYER_ARN_OUTPUT" =~ ^arn:aws: ]]; then
           echo "ERROR: Failed to get latest layer ARN for ${LAYER_NAME}"
+          echo "Exit code: $LAYER_EXIT_CODE"
+          echo "Output: $LAYER_ARN_OUTPUT"
           exit 1
         fi
+        LAYER_ARN="$LAYER_ARN_OUTPUT"
         
         aws lambda update-function-code \
           --function-name "$FUNCTION_NAME" \
@@ -308,16 +321,21 @@ phases:
       - |
         FUNCTION_NAME="${APP_PREFIX}OAuthCallback"
         LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
-        LAYER_ARN=$(aws lambda list-layer-versions \
+        LAYER_ARN_OUTPUT=$(aws lambda list-layer-versions \
           --layer-name "${LAYER_NAME}" \
           --max-items 1 \
           --query 'LayerVersions[0].LayerVersionArn' \
           --output text 2>&1)
+        LAYER_EXIT_CODE=$?
         
-        if [ -z "$LAYER_ARN" ] || [ "$LAYER_ARN" = "" ]; then
+        # Validate layer ARN - must start with "arn:aws:" and not be empty
+        if [ $LAYER_EXIT_CODE -ne 0 ] || [ -z "$LAYER_ARN_OUTPUT" ] || [[ ! "$LAYER_ARN_OUTPUT" =~ ^arn:aws: ]]; then
           echo "ERROR: Failed to get latest layer ARN for ${LAYER_NAME}"
+          echo "Exit code: $LAYER_EXIT_CODE"
+          echo "Output: $LAYER_ARN_OUTPUT"
           exit 1
         fi
+        LAYER_ARN="$LAYER_ARN_OUTPUT"
         
         aws lambda update-function-code \
           --function-name "$FUNCTION_NAME" \
