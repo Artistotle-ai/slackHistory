@@ -28,6 +28,27 @@ phases:
 
   build:
     commands:
+      # PHASE 0 - Clean up old infrastructure (if needed)
+      - echo ""
+      - echo "PHASE 0 - Cleaning up old infrastructure"
+      - |
+        # Check for old Lambda layer versions (keep only last 5 versions)
+        LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
+        if aws lambda list-layer-versions --layer-name "$LAYER_NAME" --query 'LayerVersions[].Version' --output text >/dev/null 2>&1; then
+          OLD_VERSIONS=$(aws lambda list-layer-versions --layer-name "$LAYER_NAME" --query 'LayerVersions[5:].Version' --output text 2>/dev/null || echo "")
+          if [ -n "$OLD_VERSIONS" ]; then
+            echo "Cleaning up old layer versions: $OLD_VERSIONS"
+            for version in $OLD_VERSIONS; do
+              echo "Deleting layer version: $version"
+              aws lambda delete-layer-version --layer-name "$LAYER_NAME" --version-number "$version" || true
+            done
+          else
+            echo "No old layer versions to clean up"
+          fi
+        else
+          echo "Layer does not exist yet, skipping cleanup"
+        fi
+      
       # PHASE 2 - Package slack-shared as Lambda Layer
       - echo ""
       - echo "PHASE 2 - Packaging slack-shared as Lambda Layer"
@@ -70,18 +91,42 @@ phases:
         fi
         
         # Publish new layer version
-        LAYER_VERSION=$(aws lambda publish-layer-version \
+        # Separate stdout and stderr to properly capture version number
+        PUBLISH_OUTPUT=$(aws lambda publish-layer-version \
           --layer-name "${LAYER_NAME}" \
           --description "Shared utilities and types for Mnemosyne Slack functions" \
           --zip-file fileb://slack-shared-layer.zip \
-          --compatible-runtimes nodejs22 \
+          --compatible-runtimes nodejs22.x \
           --compatible-architectures arm64 \
-          --query 'Version' --output text)
+          --query 'Version' --output text 2>&1)
         
+        PUBLISH_EXIT_CODE=$?
+        
+        if [ $PUBLISH_EXIT_CODE -ne 0 ]; then
+          echo "ERROR: Failed to publish layer version:"
+          echo "$PUBLISH_OUTPUT"
+          exit 1
+        fi
+        
+        LAYER_VERSION="$PUBLISH_OUTPUT"
+        
+        # Verify layer version is a valid number
+        if [ -z "$LAYER_VERSION" ] || ! [[ "$LAYER_VERSION" =~ ^[0-9]+$ ]]; then
+          echo "ERROR: Invalid layer version returned: ${LAYER_VERSION}"
+          exit 1
+        fi
+        
+        # Get layer ARN for the published version
         LAYER_ARN=$(aws lambda get-layer-version \
           --layer-name "${LAYER_NAME}" \
           --version-number "${LAYER_VERSION}" \
-          --query 'LayerVersionArn' --output text)
+          --query 'LayerVersionArn' --output text 2>&1)
+        
+        if [ $? -ne 0 ] || [ -z "$LAYER_ARN" ] || [ "$LAYER_ARN" = "" ]; then
+          echo "ERROR: Failed to get layer ARN for version ${LAYER_VERSION}"
+          echo "$LAYER_ARN"
+          exit 1
+        fi
         
         echo "✓ Layer version ${LAYER_VERSION} published: ${LAYER_ARN}"
       
@@ -211,8 +256,14 @@ phases:
         LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
         LAYER_ARN=$(aws lambda list-layer-versions \
           --layer-name "${LAYER_NAME}" \
+          --max-items 1 \
           --query 'LayerVersions[0].LayerVersionArn' \
-          --output text)
+          --output text 2>&1)
+        
+        if [ -z "$LAYER_ARN" ] || [ "$LAYER_ARN" = "" ]; then
+          echo "ERROR: Failed to get latest layer ARN for ${LAYER_NAME}"
+          exit 1
+        fi
         
         # Update function code
         aws lambda update-function-code \
@@ -233,8 +284,14 @@ phases:
         LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
         LAYER_ARN=$(aws lambda list-layer-versions \
           --layer-name "${LAYER_NAME}" \
+          --max-items 1 \
           --query 'LayerVersions[0].LayerVersionArn' \
-          --output text)
+          --output text 2>&1)
+        
+        if [ -z "$LAYER_ARN" ] || [ "$LAYER_ARN" = "" ]; then
+          echo "ERROR: Failed to get latest layer ARN for ${LAYER_NAME}"
+          exit 1
+        fi
         
         aws lambda update-function-code \
           --function-name "$FUNCTION_NAME" \
@@ -253,8 +310,14 @@ phases:
         LAYER_NAME="${APP_PREFIX}SlackSharedLayer"
         LAYER_ARN=$(aws lambda list-layer-versions \
           --layer-name "${LAYER_NAME}" \
+          --max-items 1 \
           --query 'LayerVersions[0].LayerVersionArn' \
-          --output text)
+          --output text 2>&1)
+        
+        if [ -z "$LAYER_ARN" ] || [ "$LAYER_ARN" = "" ]; then
+          echo "ERROR: Failed to get latest layer ARN for ${LAYER_NAME}"
+          exit 1
+        fi
         
         aws lambda update-function-code \
           --function-name "$FUNCTION_NAME" \

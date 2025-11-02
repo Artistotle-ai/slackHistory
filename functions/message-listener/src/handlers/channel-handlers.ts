@@ -19,6 +19,9 @@ import {
 } from "mnemosyne-slack-shared";
 import { putItem, getLatestItem, updateItem } from "../dynamodb";
 
+// NOTE: This is read at module load time, not runtime
+// This means tests need to set process.env.SLACK_ARCHIVE_TABLE before importing this module
+// or use jest.resetModules() to force a fresh import after setting env vars
 const tableName = process.env.SLACK_ARCHIVE_TABLE!;
 
 /**
