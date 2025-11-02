@@ -15,10 +15,10 @@ phases:
       - echo "=== Checking for infrastructure changes ==="
       - BUILD_TYPE=infrastructure node infrastructure/scripts/check-changes.js
       - |
-        ENV_FILE="build-changes.env"
+        ENV_FILE="${CODEBUILD_SRC_DIR:-.}/build-changes.env"
         if [ -f "${ENV_FILE}" ]; then
           set -a  # automatically export all variables
-          . "${ENV_FILE}"
+          source "${ENV_FILE}" || . "${ENV_FILE}"
           set +a
           echo "Loaded HAS_CHANGES=${HAS_CHANGES} from ${ENV_FILE}"
         else
@@ -38,10 +38,10 @@ phases:
   build:
     commands:
       - |
-        ENV_FILE="build-changes.env"
+        ENV_FILE="${CODEBUILD_SRC_DIR:-.}/build-changes.env"
         if [ -f "${ENV_FILE}" ]; then
           set -a
-          . "${ENV_FILE}"
+          source "${ENV_FILE}" || . "${ENV_FILE}"
           set +a
         fi
       - |
