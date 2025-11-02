@@ -86,10 +86,14 @@ export class PipelineLambdasStack extends cdk.Stack {
     }));
 
     // Single CodeBuild project for all Lambda builds and deploys
+    // Use standard Amazon Linux 2023 ARM image with SMALL compute type
+    // Node.js 22 will be installed manually in buildspec (Lambda standard images require LARGE)
     const project = new codebuild.PipelineProject(this, 'LambdasBuildDeployProject', {
       projectName: `${appPrefix}LambdasBuildDeploy`,
       environment: {
-        buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
+        // Use standard Amazon Linux 2023 ARM image (supports SMALL compute)
+        // Node.js 22 will be installed in buildspec using nvm
+        buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_2_0,
         computeType: codebuild.ComputeType.SMALL,
         privileged: false,
       },
