@@ -12,7 +12,6 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "package-json-merge": "^0.0.1"
+    "merge-package-json": "^0.1.3"
   }
 }
-
