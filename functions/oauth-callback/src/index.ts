@@ -1,6 +1,8 @@
 import {
   LambdaFunctionURLRequest,
   LambdaFunctionURLResponse,
+  formatErrorMessage,
+  logger,
 } from "mnemosyne-slack-shared";
 import { loadConfig, getOAuthCredentials } from "./config";
 import { storeOAuthTokens } from "./dynamodb";
@@ -19,7 +21,7 @@ let config: ReturnType<typeof loadConfig>;
 try {
   config = loadConfig();
 } catch (error) {
-  console.error("Failed to load configuration:", error);
+  logger.error("Failed to load configuration", error);
   throw error;
 }
 
@@ -38,27 +40,35 @@ export const handler = async (
     try {
       ({ code, state } = validateQueryParams(queryParams));
     } catch (error) {
-      console.error("Query parameter validation failed:", error);
-      return createErrorResponse(400, error instanceof Error ? error.message : String(error));
+      logger.error("Query parameter validation failed", error);
+      return createErrorResponse(400, formatErrorMessage(error));
     }
 
-    // Note: For OAuth redirects, Slack validates:
-    // 1. The redirect_uri matches what's registered in the app
-    // 2. The code can only be exchanged once (Slack enforces this)
-    // 3. The state parameter is returned for CSRF protection (we validate it exists)
+    // Security Note: OAuth redirect security model
     // Unlike webhooks, OAuth redirects don't include signature headers because
     // they're browser redirects, not API calls. Security comes from:
-    // - Single-use codes enforced by Slack
-    // - redirect_uri validation by Slack
-    // - State parameter for CSRF protection (should be validated against expected value in production)
+    // 1. Single-use codes: Slack codes can only be exchanged once
+    // 2. redirect_uri validation: Slack validates redirect_uri matches app registration
+    // 3. State parameter: Returned for CSRF protection (currently we validate it exists,
+    //    but should validate against expected value in production for full CSRF protection)
+    // 4. HTTPS: All communication over HTTPS prevents code interception
+    //
+    // Note: State validation is minimal in MVP - should enhance for production to:
+    // - Store state value during OAuth initiation
+    // - Validate state matches stored value here
+    // - Reject requests with invalid/missing state
 
-    // Get OAuth credentials from Secrets Manager
+    // Get OAuth credentials from Secrets Manager (cached)
+    // Credentials are needed to exchange authorization code for access token
     const credentials = await getOAuthCredentials(config);
 
     // Get redirect URI from environment variable
+    // Must match the redirect_uri registered in Slack app settings
     const redirectUri = getRedirectUri();
 
-    // Exchange code for tokens
+    // Exchange authorization code for access/refresh tokens
+    // This is the OAuth 2.0 token exchange step
+    // Code is single-use and expires quickly (usually < 10 minutes)
     let oauthResponse;
     try {
       oauthResponse = await exchangeCodeForTokens(
@@ -68,38 +78,47 @@ export const handler = async (
         redirectUri
       );
     } catch (error) {
-      console.error("OAuth exchange error:", error);
+      // OAuth exchange failures are typically:
+      // - Invalid/expired code (already used, too old)
+      // - Invalid credentials (wrong client_id/secret)
+      // - redirect_uri mismatch
+      logger.error("OAuth exchange error", error);
       return createErrorResponse(
         401,
-        `Unauthorized: Failed to exchange code for tokens - ${error instanceof Error ? error.message : String(error)}`
+        `Unauthorized: Failed to exchange code for tokens - ${formatErrorMessage(error)}`
       );
     }
 
-    // Create token item for DynamoDB
+    // Create token item for DynamoDB storage
+    // Includes access token, refresh token, expiration, team info
     const tokenItem = createOAuthTokenItem(oauthResponse);
 
     // Store tokens in DynamoDB
+    // Tokens are stored per team_id - one token set per Slack workspace
+    // Used by message-listener and file-processor to authenticate Slack API calls
     try {
       await storeOAuthTokens(config.tableName, tokenItem);
     } catch (error) {
-      console.error("DynamoDB write error:", error);
+      // DynamoDB write failures are critical - tokens must be stored
+      // If write fails, user must restart OAuth flow
+      logger.error("DynamoDB write error", error);
       return createErrorResponse(
         500,
-        `Internal Server Error: Failed to store tokens - ${error instanceof Error ? error.message : String(error)}`
+        `Internal Server Error: Failed to store tokens - ${formatErrorMessage(error)}`
       );
     }
 
-    console.log(
+    logger.info(
       `Successfully stored OAuth tokens for team: ${tokenItem.team_id}`
     );
 
     // Return success response
     return createSuccessResponse();
   } catch (error) {
-    console.error("Unhandled error in OAuth callback:", error);
+    logger.error("Unhandled error in OAuth callback", error);
     return createErrorResponse(
       500,
-      `Internal Server Error: ${error instanceof Error ? error.message : String(error)}`
+      `Internal Server Error: ${formatErrorMessage(error)}`
     );
   }
 };

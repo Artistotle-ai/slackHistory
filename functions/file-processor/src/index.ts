@@ -1,22 +1,33 @@
 import { DynamoDBStreamEvent, Context } from 'aws-lambda';
 import { S3Client } from '@aws-sdk/client-s3';
-import { getOAuthCredentials } from 'mnemosyne-slack-shared';
+import { getOAuthCredentials, logger } from 'mnemosyne-slack-shared';
 import { loadConfig } from './config';
 import { processStreamRecord } from './stream-handler';
 
 /**
- * Main Lambda handler
+ * Main Lambda handler for DynamoDB stream events
+ * 
+ * Processes DynamoDB stream records triggered by changes to SlackArchive table.
+ * Each record is processed independently - failures in one record don't stop
+ * processing of others. This ensures maximum throughput and resilience.
+ * 
+ * @param event - DynamoDB stream event containing multiple records
+ * @param _context - Lambda context (unused)
+ * @returns Processing summary
  */
 export const handler = async (event: DynamoDBStreamEvent, _context: Context) => {
-  console.log('File Processor invoked with', event.Records.length, 'records');
+  logger.info(`File Processor invoked with ${event.Records.length} records`);
 
+  // Load configuration (table name, bucket name, OAuth config)
   const config = loadConfig();
   const s3Client = new S3Client({ region: config.oauthConfig.region });
 
-  // Get OAuth credentials (cached)
+  // Get OAuth credentials (cached for performance)
+  // Credentials are needed to retrieve bot token from DynamoDB
   const { clientId, clientSecret } = await getOAuthCredentials(config.oauthConfig);
 
-  // Process each record
+  // Process each record independently
+  // Failures in one record don't block processing of others
   for (const record of event.Records) {
     try {
       await processStreamRecord(
@@ -28,8 +39,9 @@ export const handler = async (event: DynamoDBStreamEvent, _context: Context) => 
         clientSecret
       );
     } catch (error) {
-      console.error('Failed to process stream record:', error);
-      // Continue with other records even if one fails
+      // Log error but continue processing other records
+      // This ensures partial batch failures don't block all records
+      logger.error('Failed to process stream record', error);
     }
   }
 

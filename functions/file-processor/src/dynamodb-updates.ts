@@ -1,7 +1,14 @@
-import { updateItem, DynamoDBKey } from 'mnemosyne-slack-shared';
+import { updateItem, DynamoDBKey, logger } from 'mnemosyne-slack-shared';
 
 /**
  * Update message with S3 keys for successfully processed files
+ * 
+ * Appends new S3 keys to the files_s3 array in DynamoDB. Uses list_append
+ * to add keys without losing existing ones (important for partial retries).
+ * 
+ * @param tableName - DynamoDB table name
+ * @param item - Message item (contains itemId and timestamp for key lookup)
+ * @param s3Keys - Array of S3 keys (format: slack/{team_id}/{channel_id}/{ts}/{file_id})
  */
 export async function updateMessageWithS3Keys(
   tableName: string,
@@ -9,7 +16,7 @@ export async function updateMessageWithS3Keys(
   s3Keys: string[]
 ): Promise<void> {
   if (s3Keys.length === 0) {
-    return;
+    return; // Nothing to update
   }
 
   const key: DynamoDBKey = {
@@ -17,6 +24,8 @@ export async function updateMessageWithS3Keys(
     timestamp: item.timestamp,
   };
 
+  // Use list_append to add new keys to existing array (or create new array if none exists)
+  // This is idempotent-safe - can be called multiple times without duplicates
   await updateItem(
     tableName,
     key,
@@ -27,11 +36,19 @@ export async function updateMessageWithS3Keys(
     }
   );
 
-  console.log(`Updated DynamoDB with ${s3Keys.length} S3 keys`);
+  logger.debug(`Updated DynamoDB with ${s3Keys.length} S3 keys`);
 }
 
 /**
- * Mark message files as failed
+ * Mark message files as failed in DynamoDB
+ * 
+ * Records partial failures when some files in a message fail to download.
+ * This allows monitoring and potential retry of failed files without affecting
+ * successfully processed files.
+ * 
+ * @param tableName - DynamoDB table name
+ * @param item - Message item
+ * @param failedFiles - Array of failed file metadata with error details
  */
 export async function markMessageFilesFailed(
   tableName: string,
@@ -39,7 +56,7 @@ export async function markMessageFilesFailed(
   failedFiles: Array<{ file: any; error: Error }>
 ): Promise<void> {
   if (failedFiles.length === 0) {
-    return;
+    return; // Nothing to mark as failed
   }
 
   const key: DynamoDBKey = {
@@ -47,6 +64,7 @@ export async function markMessageFilesFailed(
     timestamp: item.timestamp,
   };
 
+  // Record failure details for monitoring/retry
   const updateExpression = 'SET files_fetch_failed = :failed, files_fetch_error = :error';
   const expressionAttributeValues: Record<string, any> = {
     ':failed': true,
@@ -60,11 +78,19 @@ export async function markMessageFilesFailed(
     expressionAttributeValues
   );
 
-  console.log(`Marked ${failedFiles.length} file(s) as failed`);
+  logger.warn(`Marked ${failedFiles.length} file(s) as failed`);
 }
 
 /**
- * Mark entire message as failed
+ * Mark entire message as failed in DynamoDB
+ * 
+ * Records critical failures when message processing fails entirely (e.g.,
+ * token refresh errors, configuration issues). Used when partial failure
+ * tracking isn't applicable.
+ * 
+ * @param tableName - DynamoDB table name
+ * @param item - Message item
+ * @param error - Error that caused the failure
  */
 export async function markMessageFailed(
   tableName: string,
@@ -86,6 +112,6 @@ export async function markMessageFailed(
     }
   );
 
-  console.log('Marked record as failed');
+  logger.warn('Marked record as failed');
 }
 

@@ -1,5 +1,4 @@
-import { getSecretValue } from "mnemosyne-slack-shared";
-import { getFromCache, setInCache } from "mnemosyne-slack-shared";
+import { getSecretValue, getFromCache, setInCache, formatErrorMessage, SECRET_CACHE_TTL } from "mnemosyne-slack-shared";
 
 interface Config {
   tableName: string;
@@ -79,13 +78,13 @@ export async function getOAuthCredentials(config: Config): Promise<OAuthCredenti
       clientSecret,
     };
 
-    // Cache credentials for 1 hour
-    setInCache(OAUTH_CREDENTIALS_CACHE_KEY, credentials, 3600);
+    // Cache credentials with configured TTL (same as secrets)
+    setInCache(OAUTH_CREDENTIALS_CACHE_KEY, credentials, SECRET_CACHE_TTL);
 
     return credentials;
   } catch (error) {
     throw new Error(
-      `Failed to retrieve OAuth credentials from Secrets Manager: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to retrieve OAuth credentials from Secrets Manager: ${formatErrorMessage(error)}`
     );
   }
 }

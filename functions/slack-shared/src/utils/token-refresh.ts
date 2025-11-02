@@ -4,6 +4,7 @@ import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { OAuthTokenItem, RefreshTokenResponse } from "../config/types";
 import { REFRESH_CACHE_PREFIX, TOKEN_CACHE_PREFIX, TOKEN_DEFAULT_TTL, TOKEN_REFRESH_BUFFER } from "../config/settings";
 import { getTokenItemDbId, getTokenItemCacheKey } from "./utils";
+import { logger } from "./logger";
 
 // Cache keys
 
@@ -199,7 +200,7 @@ export async function getValidBotToken(
       }
     }
 
-    console.log(`Refreshing expired token for team: ${teamId}`);
+    logger.debug(`Refreshing expired token for team: ${teamId}`);
 
     // Mark refresh in progress
     setInCache(refreshCacheKey, true, 60); // 1 minute TTL
@@ -244,7 +245,7 @@ export async function getValidBotToken(
       // Return new token
       tokenItem = updatedTokenItem;
 
-      console.log(`Successfully refreshed token for team: ${teamId}`);
+      logger.debug(`Successfully refreshed token for team: ${teamId}`);
     } catch (error) {
       // Remove refresh lock on error
       setInCache(refreshCacheKey, false, 1); // Expire immediately

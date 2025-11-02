@@ -1,11 +1,22 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { getValidBotToken } from 'mnemosyne-slack-shared';
+import { getValidBotToken, logger } from 'mnemosyne-slack-shared';
 import * as https from 'https';
 import * as http from 'http';
 import { OAuthConfig } from 'mnemosyne-slack-shared';
 
 /**
  * Stream file from Slack to S3 without loading into memory
+ * 
+ * This function streams data directly from Slack's API response to S3,
+ * avoiding loading large files into Lambda memory. This is critical for
+ * memory efficiency and to stay within Lambda's memory limits.
+ * 
+ * @param url - Slack file URL (url_private from file metadata)
+ * @param botToken - Bot OAuth token for authentication
+ * @param s3Key - S3 key where file will be stored
+ * @param bucketName - S3 bucket name
+ * @param s3Client - S3 client instance
+ * @param contentType - Optional content type (falls back to response header or octet-stream)
  */
 function streamFileFromSlackToS3(
   url: string,
@@ -16,10 +27,11 @@ function streamFileFromSlackToS3(
   contentType?: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    // Create HTTP request to Slack
+    // Parse URL to determine protocol (https/http)
     const urlObj = new URL(url);
     const protocol = urlObj.protocol === 'https:' ? https : http;
 
+    // Configure HTTP request to Slack API
     const options = {
       hostname: urlObj.hostname,
       path: urlObj.pathname + urlObj.search,
@@ -29,23 +41,27 @@ function streamFileFromSlackToS3(
       },
     };
 
+    // Create HTTP request and handle response
     const req = protocol.request(options, (res) => {
+      // Check for non-200 status codes
       if (res.statusCode !== 200) {
         reject(new Error(`Failed to download file: HTTP ${res.statusCode}`));
         return;
       }
 
-      // Create S3 upload stream
+      // Stream response directly to S3 (no intermediate buffering)
+      // This allows handling files larger than Lambda memory without OOM errors
       const uploadParams = {
         Bucket: bucketName,
         Key: s3Key,
-        Body: res, // Stream directly from response
+        Body: res, // Stream directly from HTTP response to S3
         ContentType: contentType || res.headers['content-type'] || 'application/octet-stream',
       };
 
+      // Upload stream to S3
       s3Client.send(new PutObjectCommand(uploadParams))
         .then(() => {
-          console.log(`Successfully uploaded ${s3Key}`);
+          logger.debug(`Successfully uploaded ${s3Key}`);
           resolve();
         })
         .catch((err: any) => {
@@ -53,16 +69,28 @@ function streamFileFromSlackToS3(
         });
     });
 
+    // Handle request errors (network issues, connection failures)
     req.on('error', (err: Error) => {
       reject(new Error(`Failed to download from Slack: ${err.message}`));
     });
 
+    // Send the request
     req.end();
   });
 }
 
 /**
  * Retry with exponential backoff
+ * 
+ * Implements exponential backoff retry strategy: delays between attempts
+ * increase exponentially (1s, 2s, 4s) to avoid overwhelming downstream services
+ * during transient failures. Useful for network calls that may fail temporarily.
+ * 
+ * @param fn - Function to retry (must return a Promise)
+ * @param maxAttempts - Maximum number of attempts (default: 3)
+ * @param baseDelayMs - Base delay in milliseconds (default: 1000ms = 1s)
+ * @returns Result of successful function call
+ * @throws Last error if all attempts fail
  */
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
@@ -76,12 +104,17 @@ async function retryWithBackoff<T>(
       return await fn();
     } catch (error) {
       lastError = error as Error;
+      // Don't retry if this was the last attempt
       if (attempt === maxAttempts) {
         break;
       }
       
+      // Calculate exponential backoff delay: baseDelay * 2^(attempt-1)
+      // Attempt 1: 1000ms (1s)
+      // Attempt 2: 2000ms (2s)
+      // Attempt 3: 4000ms (4s)
       const delayMs = baseDelayMs * Math.pow(2, attempt - 1);
-      console.log(`Attempt ${attempt} failed, retrying in ${delayMs}ms...`);
+      logger.debug(`Attempt ${attempt} failed, retrying in ${delayMs}ms...`);
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }
@@ -107,7 +140,7 @@ export async function processFile(
 
   const s3Key = `slack/${teamId}/${channelId}/${ts}/${file.id}`;
 
-  console.log(`Processing file: ${file.id} (${file.name || 'unnamed'})`);
+  logger.debug(`Processing file: ${file.id} (${file.name || 'unnamed'})`);
 
   // Stream file from Slack to S3 with retry logic
   await retryWithBackoff(
@@ -128,6 +161,18 @@ export async function processFile(
 
 /**
  * Process all files in a message
+ * 
+ * Downloads all files from Slack and uploads to S3. Handles partial failures
+ * gracefully - if one file fails, others continue processing. Returns both
+ * successful downloads and failures for separate handling.
+ * 
+ * @param item - Message item with files array
+ * @param oauthConfig - OAuth configuration for token retrieval
+ * @param bucketName - S3 bucket name
+ * @param s3Client - S3 client instance
+ * @param clientId - OAuth client ID for token refresh
+ * @param clientSecret - OAuth client secret for token refresh
+ * @returns Object with successful S3 keys and failed file details
  */
 export async function processMessageFiles(
   item: any,
@@ -138,6 +183,7 @@ export async function processMessageFiles(
   clientSecret: string
 ): Promise<{ s3Keys: string[]; failedFiles: Array<{ file: any; error: Error }> }> {
   // Get valid bot token (auto-refreshes if needed)
+  // Token is cached per team_id, so multiple files in same message reuse token
   const botToken = await getValidBotToken(
     oauthConfig.tableName,
     item.team_id,
@@ -145,11 +191,17 @@ export async function processMessageFiles(
     clientSecret
   );
 
+  // Track successes and failures separately
+  // Allows partial success - some files succeed while others fail
   const s3Keys: string[] = [];
   const failedFiles: Array<{ file: any; error: Error }> = [];
   
+  // Process each file independently
+  // Failures in one file don't block processing of others
   for (const file of item.files) {
     try {
+      // Process single file with retry logic (3 attempts with exponential backoff)
+      // Returns S3 key if successful, throws error if all retries fail
       const s3Key = await processFile(
         file,
         item.team_id,
@@ -161,11 +213,16 @@ export async function processMessageFiles(
       );
       s3Keys.push(s3Key);
     } catch (fileError) {
-      console.error(`Failed to process file ${file.id} after retries:`, fileError);
+      // File processing failed after all retries - log and track for later
+      // Don't throw - continue processing remaining files
+      logger.error(`Failed to process file ${file.id} after retries`, fileError);
       failedFiles.push({ file, error: fileError as Error });
     }
   }
 
+  // Return both successes and failures for separate DynamoDB updates
+  // Successes: append to files_s3 array
+  // Failures: mark in files_fetch_failed and files_fetch_error fields
   return { s3Keys, failedFiles };
 }
 

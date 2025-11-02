@@ -14,6 +14,7 @@ import {
   ChannelConvertToPrivateEvent,
   ChannelConvertToPublicEvent,
   FileSharedEvent,
+  logger,
 } from "mnemosyne-slack-shared";
 import { getMessageChannelId } from "mnemosyne-slack-shared";
 import * as messageHandlers from "./handlers/message-handlers";
@@ -30,35 +31,44 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
 
   // Handle unknown events
   if (event.type === "unknown" || !("team_id" in event)) {
-    console.log(`Unknown event type: ${event.type}, ignoring`);
+    logger.debug(`Unknown event type: ${event.type}, ignoring`);
     return;
   }
 
   // Type guard: ensure team_id is a string
+  // team_id is required for all events to identify the Slack workspace
   const teamId = typeof event.team_id === "string" ? event.team_id : "";
   if (!teamId) {
-    console.log(`Event missing valid team_id, ignoring`);
+    logger.debug(`Event missing valid team_id, ignoring`);
     return;
   }
 
   // Handle message events - TypeScript narrows based on discriminated union
+  // Message events can be: new message, edited (message_changed), or deleted (message_deleted)
   if (event.type === "message" && "ts" in event) {
     // Type guard: check if it's a valid message event (not UnknownEvent)
+    // Message events can have channel/channel_id in different formats depending on subtype
     if (("channel" in event || "channel_id" in event) && "team_id" in event) {
       const messageEvent = event as MessageEvent | MessageChangedEvent | MessageDeletedEvent;
+      
+      // Extract channel ID - helper function handles different event formats
       const extractedChannelId = getMessageChannelId(messageEvent);
       if (!extractedChannelId || typeof extractedChannelId !== "string") {
-        console.warn("Message event missing channel_id, skipping");
+        logger.warn("Message event missing channel_id, skipping");
         return;
       }
       const channelId: string = extractedChannelId;
 
-      // Narrow by subtype
+      // Route to specific handler based on message subtype
+      // Check subtypes in order: changed -> deleted -> new message (default)
       if ("subtype" in messageEvent && messageEvent.subtype === "message_changed" && "message" in messageEvent) {
+        // Message was edited - update existing message in DynamoDB
         await messageHandlers.handleMessageChanged(messageEvent as MessageChangedEvent, teamId, channelId);
       } else if ("subtype" in messageEvent && messageEvent.subtype === "message_deleted" && "deleted_ts" in messageEvent) {
+        // Message was deleted - mark as deleted in DynamoDB (soft delete)
         await messageHandlers.handleMessageDeleted(messageEvent as MessageDeletedEvent, teamId, channelId);
       } else if ("ts" in messageEvent && typeof messageEvent.ts === "string") {
+        // New message - create new entry in DynamoDB
         await messageHandlers.handleMessage(messageEvent as MessageEvent, teamId, channelId);
       }
     }
@@ -162,13 +172,13 @@ export async function routeEvent(event: StrictSlackEvent): Promise<void> {
         const fileEvent = event as FileSharedEvent;
         // file_shared events are logged but not stored separately
         // Files are already captured via message.files field
-        console.log(`File shared event: file_id=${fileEvent.file_id}, channel_id=${fileEvent.channel_id || 'N/A'}`);
+        logger.debug(`File shared event: file_id=${fileEvent.file_id}, channel_id=${fileEvent.channel_id || 'N/A'}`);
         return;
       }
     }
   }
   
   // Unknown or unhandled event type
-  console.log(`Unhandled event type in router: ${(event as { type: string }).type}, ignoring`);
+  logger.debug(`Unhandled event type in router: ${(event as { type: string }).type}, ignoring`);
 }
 

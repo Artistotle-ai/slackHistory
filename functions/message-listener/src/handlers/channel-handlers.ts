@@ -11,6 +11,7 @@ import {
   ChannelConvertToPrivateEvent,
   ChannelConvertToPublicEvent,
   SlackEvent,
+  logger,
 } from "mnemosyne-slack-shared";
 import {
   getChannelItemId,
@@ -67,7 +68,7 @@ export async function handleChannelCreated(
     raw_event: event as unknown as SlackEvent,
   });
 
-  console.log(`Created channel: ${itemId}, name: ${name}`);
+  logger.info(`Created channel: ${itemId}, name: ${name}`);
 }
 
 /**
@@ -83,6 +84,8 @@ export async function handleChannelRename(
   const currentChannel = await getLatestItem<ChannelItem>(tableName, itemId);
 
   if (!currentChannel) {
+    // Channel doesn't exist - create new entry
+    // This handles race condition where rename arrives before channel_created event
     await putItem(tableName, {
       itemId,
       timestamp: event.event_ts || String(Date.now() / 1000),
@@ -90,14 +93,22 @@ export async function handleChannelRename(
       team_id: teamId,
       channel_id: channelId,
       name: newName,
-      names_history: [newName],
-      visibility: "public",
+      names_history: [newName], // Start history with current name
+      visibility: "public", // Default to public (may be incorrect but safe default)
       raw_event: event as unknown as SlackEvent,
     });
   } else {
-    // Build names_history: start with existing history or current name, add new name if different
+    // Channel exists - update name and append to history
+    // Build names_history: start with existing history or current name as fallback
+    // Only add new name to history if it's different from the last entry (avoid duplicates)
     const existingHistory = currentChannel.names_history || [currentChannel.name || channelId];
-    const namesToAdd = existingHistory[existingHistory.length - 1] !== newName ? [newName] : [];
+    const lastKnownName = existingHistory[existingHistory.length - 1];
+    
+    // Only append if name actually changed (avoid duplicate entries)
+    const namesToAdd = lastKnownName !== newName ? [newName] : [];
+    
+    // Cap history at 20 entries to prevent unbounded growth
+    // Keeps most recent 20 renames (oldest entries dropped)
     const namesHistory = capArray([...existingHistory, ...namesToAdd], 20);
     
     await updateChannelItem(teamId, channelId, "SET name = :name, names_history = :names_history, raw_event = :raw_event", {
@@ -106,7 +117,7 @@ export async function handleChannelRename(
       ":raw_event": event as unknown as SlackEvent,
     }, event.event_ts);
   }
-  console.log(`Renamed channel: ${itemId}, new name: ${newName}`);
+  logger.info(`Renamed channel: ${itemId}, new name: ${newName}`);
 }
 
 /**
@@ -124,7 +135,7 @@ export async function handleChannelDeleted(
     { ":true": true, ":raw_event": event as unknown as SlackEvent },
     event.event_ts
   );
-  console.log(`Marked channel as deleted: ${getChannelItemId(teamId, channelId)}`);
+  logger.info(`Marked channel as deleted: ${getChannelItemId(teamId, channelId)}`);
 }
 
 /**
@@ -142,7 +153,7 @@ export async function handleChannelArchive(
     { ":true": true, ":raw_event": event as unknown as SlackEvent },
     event.event_ts
   );
-  console.log(`Archived channel: ${getChannelItemId(teamId, channelId)}`);
+  logger.info(`Archived channel: ${getChannelItemId(teamId, channelId)}`);
 }
 
 /**
@@ -160,7 +171,7 @@ export async function handleChannelUnarchive(
     { ":raw_event": event as unknown as SlackEvent },
     event.event_ts
   );
-  console.log(`Unarchived channel: ${getChannelItemId(teamId, channelId)}`);
+  logger.info(`Unarchived channel: ${getChannelItemId(teamId, channelId)}`);
 }
 
 /**
@@ -202,7 +213,7 @@ export async function handleChannelIdChanged(
 
   await putItem(tableName, item);
 
-  console.log(`Channel ID changed: ${oldChannelId} -> ${newChannelId}`);
+  logger.info(`Channel ID changed: ${oldChannelId} -> ${newChannelId}`);
 }
 
 /**
@@ -224,7 +235,7 @@ export async function handleChannelPurposeOrTopic(
     { ":value": value, ":raw_event": event as unknown as SlackEvent },
     event.event_ts
   );
-  console.log(`Updated channel ${field}: ${getChannelItemId(teamId, channelId)}`);
+  logger.info(`Updated channel ${field}: ${getChannelItemId(teamId, channelId)}`);
 }
 
 /**
@@ -243,6 +254,6 @@ export async function handleChannelVisibilityChange(
     { ":visibility": visibility, ":raw_event": event as unknown as SlackEvent },
     event.event_ts
   );
-  console.log(`Changed channel visibility: ${getChannelItemId(teamId, channelId)}, visibility: ${visibility}`);
+  logger.info(`Changed channel visibility: ${getChannelItemId(teamId, channelId)}, visibility: ${visibility}`);
 }
 

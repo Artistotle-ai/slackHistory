@@ -1,13 +1,19 @@
-import { putItem, queryItems, DynamoDBKey } from 'mnemosyne-slack-shared';
+import { putItem, queryItems, DynamoDBKey, logger } from 'mnemosyne-slack-shared';
 
 /**
- * Calculate approximate item size in bytes (rough estimate for JSON)
+ * Calculate approximate item size in bytes
+ * 
+ * Estimates DynamoDB item size by serializing to JSON. This is a rough
+ * approximation - actual DynamoDB size calculation includes attribute overhead,
+ * but JSON size provides a reasonable estimate for our use case.
+ * 
+ * Note: DynamoDB item limit is 400KB, we shard at 350KB for safety margin.
  */
 function estimateItemSize(item: any): number {
   return JSON.stringify(item).length;
 }
 
-interface ChannelIndexShard {
+interface ChannelIndexShard extends Record<string, unknown> {
   itemId: string;
   timestamp: string;
   channels_map?: Record<string, string>;
@@ -15,6 +21,14 @@ interface ChannelIndexShard {
 
 /**
  * Get or create the latest ChannelIndex shard
+ * 
+ * ChannelIndex is sharded by timestamp (incremented when shard exceeds 350KB).
+ * This function queries for the latest shard (highest timestamp) or creates
+ * the first shard (timestamp '0') if none exists.
+ * 
+ * @param tableName - DynamoDB table name
+ * @param teamId - Slack team ID
+ * @returns Latest shard or null if creation fails
  */
 async function getLatestChannelIndexShard(
   tableName: string,
@@ -22,23 +36,25 @@ async function getLatestChannelIndexShard(
 ): Promise<ChannelIndexShard | null> {
   const channelIndexItemId = `channelindex#${teamId}`;
   
-  // Query for all shards (sorted by timestamp descending)
+  // Query for latest shard (sorted by timestamp descending, limit 1)
+  // Shards are numbered: '0', '1', '2', ... (higher number = newer)
   const shards = await queryItems<ChannelIndexShard>({
     tableName,
     itemId: channelIndexItemId,
     limit: 1,
-    scanIndexForward: false, // Get latest first
+    scanIndexForward: false, // Get latest (highest timestamp) first
   });
 
   if (shards.length > 0) {
     return shards[0];
   }
 
-  // No shard exists, create the first one
+  // No shard exists - create the first one with timestamp '0'
+  // This happens on first channel creation for a team
   const firstShard: ChannelIndexShard = {
     itemId: channelIndexItemId,
-    timestamp: '0',
-    channels_map: {},
+    timestamp: '0', // First shard starts at '0'
+    channels_map: {}, // Empty map initially
   };
 
   await putItem(tableName, firstShard);
@@ -60,53 +76,64 @@ export async function maintainChannelIndex(
 
   const teamId = channelItem.team_id;
   if (!teamId) {
-    console.warn('Channel item missing team_id, skipping ChannelIndex update');
+    logger.warn('Channel item missing team_id, skipping ChannelIndex update');
     return;
   }
 
   const channelId = channelItem.channel_id;
   if (!channelId) {
-    console.warn('Channel item missing channel_id, skipping ChannelIndex update');
+    logger.warn('Channel item missing channel_id, skipping ChannelIndex update');
     return;
   }
 
   // Get the latest ChannelIndex shard
   const shard = await getLatestChannelIndexShard(tableName, teamId);
   if (!shard) {
-    console.error('Failed to get or create ChannelIndex shard');
+    logger.error('Failed to get or create ChannelIndex shard');
     return;
   }
 
-  // Determine the channel name
+  // Determine the channel name based on channel state
+  // ChannelIndex maintains channel_id -> name mapping for efficient lookups
+  // For deleted channels, we prefix name with 'deleted_' to mark them in index
+  // This preserves historical name while indicating deletion status
   let channelName: string;
   if (channelItem.deleted) {
-    // Channel deleted - prefix with deleted_
+    // Channel was deleted - mark with 'deleted_' prefix
+    // Use previous name from oldChannelItem if available (before deletion)
+    // Falls back to current name if oldItem not available, or 'unknown' if neither
     const previousName = oldChannelItem?.name || channelItem.name || 'unknown';
     channelName = `deleted_${previousName}`;
   } else {
     // Channel created or renamed - use current name
+    // Falls back to 'unknown' if name missing (shouldn't happen but defensive)
     channelName = channelItem.name || 'unknown';
   }
 
-  // Update channels_map
+  // Update channels_map in the latest shard
+  // channels_map: Record<channel_id, channel_name>
   const channelsMap = shard.channels_map || {};
   channelsMap[channelId] = channelName;
 
-  // Create updated shard item
+  // Create updated shard item with new mapping
   const updatedShard: ChannelIndexShard = {
     ...shard,
     channels_map: channelsMap,
   };
 
-  // Check if shard is too large (350KB - DynamoDB item limit is 400KB)
+  // Check if shard exceeds size limit (350KB - DynamoDB limit is 400KB)
+  // We use 350KB as safety margin to avoid hitting the hard limit
   const shardSize = estimateItemSize(updatedShard);
   const maxShardSize = 350 * 1024; // 350KB
 
   if (shardSize > maxShardSize) {
-    // Create new shard with incremented timestamp
+    // Shard is too large - create a new shard
+    // Shard numbers increment: '0', '1', '2', ... (as strings for sorting)
     const currentShardNumber = parseInt(shard.timestamp, 10) || 0;
     const newShardNumber = currentShardNumber + 1;
     
+    // New shard starts with just the current channel
+    // Previous shards remain unchanged (all historical data preserved)
     const newShard: ChannelIndexShard = {
       itemId: shard.itemId,
       timestamp: newShardNumber.toString(),
@@ -115,12 +142,12 @@ export async function maintainChannelIndex(
 
     await putItem(tableName, newShard);
 
-    console.log(`Created new ChannelIndex shard ${newShardNumber} (previous shard was ${shardSize} bytes)`);
+    logger.info(`Created new ChannelIndex shard ${newShardNumber} (previous shard was ${shardSize} bytes)`);
   } else {
-    // Update existing shard
+    // Shard is within size limit - update existing shard
     await putItem(tableName, updatedShard);
 
-    console.log(`Updated ChannelIndex shard with channel ${channelId} -> ${channelName}`);
+    logger.debug(`Updated ChannelIndex shard with channel ${channelId} -> ${channelName}`);
   }
 }
 
