@@ -35,6 +35,13 @@ Processes DynamoDB stream records. Downloads Slack files and stores in S3.
    - Update DynamoDB item with S3 keys in `files_s3` array
 6. Mark failed items with `files_fetch_failed = true` for retry
 
+## Error Handling
+
+- File download failure → Log error, continue with other files
+- S3 upload failure → Log error, continue with other files
+- DynamoDB update failure → Log error, mark `files_fetch_failed = true`
+- External files (no `url_private`) → Skip, log warning
+
 ## Permissions
 
 - DynamoDB: `GetItem`, `PutItem`, `UpdateItem`, `Query` on SlackArchive table
@@ -45,4 +52,5 @@ Processes DynamoDB stream records. Downloads Slack files and stores in S3.
 ## Related
 
 - [Infrastructure Architecture](../infrastructure/architecture.md)
+- [Token Refresh](./token-refresh.md) - Token refresh implementation
 

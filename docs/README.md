@@ -21,6 +21,10 @@ Slack History Archiver - bypasses free plan message retention limits by archivin
 ### Data Model
 - **[Data Schema](requirements/requirements.md)** - DynamoDB item structure and key patterns
 
+### Development
+- **[Build Architecture](development/BUILD_EXPLAINED.md)** - Build system and TypeScript configuration
+- **[Development Workflow](development/dev-workflow.md)** - Watch mode and local development
+
 ### Slack Integration
 - **[Slack App Manifest](../slack/manifest.json)** - App configuration
 
