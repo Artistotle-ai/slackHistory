@@ -39,12 +39,19 @@ AWS serverless architecture for Slack message archival.
 - Lifecycle: Transition to IA after 90 days
 - Encryption: S3-managed
 
+**Lambda Layer:** `MnemosyneSlackSharedLayer`
+- Contains shared `slack-shared` code and dependencies
+- Attached to all Lambda functions to reduce bundle sizes
+- See [Lambda Layer Documentation](lambda-layer.md) for details
+
 **Lambda Functions:**
 
 See [Lambda Functions](../lambda-functions/) documentation:
 - [Message Listener](../lambda-functions/message-listener.md) - `MnemosyneMessageListener`
 - [OAuth Callback](../lambda-functions/oauth-callback.md) - `MnemosyneOAuthCallback`
 - [File Processor](../lambda-functions/file-processor.md) - `MnemosyneFileProcessor`
+
+All Lambda functions use the shared layer for `slack-shared` code.
 
 **IAM Role:** `MnemosyneLambdaExecutionRole`
 - DynamoDB: Read/write on `MnemosyneSlackArchive`

@@ -28,8 +28,10 @@ npx cdk deploy --all --profile default --region eu-west-1 --require-approval nev
 
 **Stacks Created:**
 - `MnemosyneBaseRolesStack` - S3, secrets, IAM
-- `MnemosyneMainInfraStack` - DynamoDB, Lambda
+- `MnemosyneMainInfraStack` - DynamoDB, Lambda functions, Lambda Layer
 - `Mnemosyne*PipelineStack` - CI/CD pipelines (3)
+
+**Note:** Lambda Layer is created in MainInfraStack but actual versions are published by CodePipeline. See [Lambda Layer Documentation](lambda-layer.md) for details.
 
 ## Post-Deployment
 
