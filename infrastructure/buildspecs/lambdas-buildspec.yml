@@ -13,7 +13,7 @@ phases:
       - npm --version
   install:
     commands:
-      - echo "=== PHASE 1: Building all Node.js apps ==="
+      - echo "PHASE 1: Building all Node.js apps"
       - echo "Building slack-shared (required by all lambdas)..."
       - |
         if [ -d "functions/slack-shared" ]; then
@@ -28,7 +28,7 @@ phases:
         fi
   build:
     commands:
-      - echo "=== Building all Lambda functions ==="
+      - echo "Building all Lambda functions"
       - echo "Building message-listener..."
       - |
         if [ -d "functions/message-listener" ]; then
@@ -71,9 +71,9 @@ phases:
           exit 1
         fi
       
-      - echo "=== All Node.js apps built successfully ==="
+      - echo "All Node.js apps built successfully"
       - echo ""
-      - echo "=== PHASE 2: Creating deployment packages ==="
+      - echo "PHASE 2: Creating deployment packages"
       - echo "Creating package for message-listener..."
       - |
         cd functions/message-listener
@@ -105,9 +105,9 @@ phases:
         cd ../..
         echo "✓ oauth-callback package created"
       
-      - echo "=== All deployment packages created ==="
+      - echo "All deployment packages created"
       - echo ""
-      - echo "=== PHASE 3: Deploying Lambda functions ==="
+      - echo "PHASE 3: Deploying Lambda functions"
       - echo "Deploying message-listener..."
       - |
         FUNCTION_NAME="${APP_PREFIX}MessageListener"
@@ -125,4 +125,4 @@ phases:
         echo "✓ oauth-callback deployed"
       
       - echo ""
-      - echo "=== All Lambda functions deployed successfully ==="
+      - echo "All Lambda functions deployed successfully"
