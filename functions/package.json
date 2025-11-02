@@ -26,6 +26,8 @@
   ],
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@babel/core": "^7.28.5"
   }
 }
-
