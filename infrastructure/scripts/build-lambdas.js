@@ -31,34 +31,68 @@ function buildLambdas() {
   if (!hasExtractedModules) {
     console.log('\nNode_modules not found in /tmp - checking for artifacts...');
     
-    // Try artifact directory first (CodePipeline extraInputs)
-    const artifactDir = path.join(PROJECT_ROOT, 'LayerBuildArtifact');
-    const zipPath = path.join(artifactDir, 'shared-node-modules.zip');
-    const tarPath = path.join(artifactDir, 'shared-node-modules.tar.gz');
+    // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR_<ArtifactName>
+    // Try multiple possible locations
+    const codebuildSrcDir = process.env.CODEBUILD_SRC_DIR || PROJECT_ROOT;
+    const possibleArtifactDirs = [
+      path.join(codebuildSrcDir, 'LayerBuildArtifact'), // Direct artifact name
+      path.join(codebuildSrcDir, '../LayerBuildArtifact'), // One level up
+      path.join(PROJECT_ROOT, 'LayerBuildArtifact'), // Project root
+      codebuildSrcDir, // Root source directory
+    ];
     
     // Fallback to project root (local builds)
     const sharedModulesZip = path.join(PROJECT_ROOT, 'shared-node-modules.zip');
     const sharedModulesTar = path.join(PROJECT_ROOT, 'shared-node-modules.tar.gz');
     
-    if (fs.existsSync(zipPath)) {
-      console.log('Extracting from LayerBuildArtifact/shared-node-modules.zip...');
-      run(`mkdir -p ${tmpDir} && unzip -q ${zipPath} -d ${tmpDir}`);
-    } else if (fs.existsSync(tarPath)) {
-      console.log('Extracting from LayerBuildArtifact/shared-node-modules.tar.gz...');
-      run(`mkdir -p ${tmpDir} && tar -xzf ${tarPath} -C ${tmpDir}`);
-    } else if (fs.existsSync(sharedModulesZip)) {
-      console.log('Extracting from shared-node-modules.zip...');
-      run(`mkdir -p ${tmpDir} && unzip -q ${sharedModulesZip} -d ${tmpDir}`);
-    } else if (fs.existsSync(sharedModulesTar)) {
-      console.log('Extracting from shared-node-modules.tar.gz...');
-      run(`mkdir -p ${tmpDir} && tar -xzf ${sharedModulesTar} -C ${tmpDir}`);
+    let foundArchive = null;
+    
+    // Check all possible artifact directories
+    for (const artifactDir of possibleArtifactDirs) {
+      const zipPath = path.join(artifactDir, 'shared-node-modules.zip');
+      const tarPath = path.join(artifactDir, 'shared-node-modules.tar.gz');
+      
+      if (fs.existsSync(zipPath)) {
+        foundArchive = { type: 'zip', path: zipPath };
+        console.log(`Found archive at: ${zipPath}`);
+        break;
+      } else if (fs.existsSync(tarPath)) {
+        foundArchive = { type: 'tar', path: tarPath };
+        console.log(`Found archive at: ${tarPath}`);
+        break;
+      }
+    }
+    
+    // Check project root fallback
+    if (!foundArchive) {
+      if (fs.existsSync(sharedModulesZip)) {
+        foundArchive = { type: 'zip', path: sharedModulesZip };
+        console.log(`Found archive at: ${sharedModulesZip}`);
+      } else if (fs.existsSync(sharedModulesTar)) {
+        foundArchive = { type: 'tar', path: sharedModulesTar };
+        console.log(`Found archive at: ${sharedModulesTar}`);
+      }
+    }
+    
+    if (foundArchive) {
+      console.log(`Extracting from ${foundArchive.path}...`);
+      if (foundArchive.type === 'zip') {
+        run(`mkdir -p ${tmpDir} && unzip -q ${foundArchive.path} -d ${tmpDir}`);
+      } else {
+        run(`mkdir -p ${tmpDir} && tar -xzf ${foundArchive.path} -C ${tmpDir}`);
+      }
     } else {
+    
       console.error('ERROR: Shared node_modules archive not found!');
-      console.error('Expected locations:');
-      console.error(`  - ${zipPath}`);
-      console.error(`  - ${tarPath}`);
+      console.error('Checked locations:');
+      possibleArtifactDirs.forEach(dir => {
+        console.error(`  - ${path.join(dir, 'shared-node-modules.zip')}`);
+        console.error(`  - ${path.join(dir, 'shared-node-modules.tar.gz')}`);
+      });
       console.error(`  - ${sharedModulesZip}`);
       console.error(`  - ${sharedModulesTar}`);
+      console.error(`CODEBUILD_SRC_DIR: ${process.env.CODEBUILD_SRC_DIR || 'not set'}`);
+      console.error(`PROJECT_ROOT: ${PROJECT_ROOT}`);
       process.exit(1);
     }
     

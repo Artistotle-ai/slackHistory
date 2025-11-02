@@ -31,18 +31,51 @@ function run(cmd, options = {}) {
 function setupLambdasEnv() {
   console.log('=== Setting up Lambda functions environment ===');
   
-  // Extract merged node_modules
-  const zipPath = path.join(ARTIFACT_DIR, 'shared-node-modules.zip');
-  const tarPath = path.join(ARTIFACT_DIR, 'shared-node-modules.tar.gz');
+  // CodePipeline extraInputs are extracted to CODEBUILD_SRC_DIR_<ArtifactName>
+  // Try multiple possible locations
+  const codebuildSrcDir = process.env.CODEBUILD_SRC_DIR || PROJECT_ROOT;
+  const possibleArtifactDirs = [
+    path.join(codebuildSrcDir, 'LayerBuildArtifact'), // Direct artifact name
+    path.join(codebuildSrcDir, '../LayerBuildArtifact'), // One level up
+    ARTIFACT_DIR, // Original path
+    codebuildSrcDir, // Root source directory
+  ];
   
-  if (fs.existsSync(zipPath)) {
-    console.log('Extracting shared-node-modules.zip...');
-    run(`unzip -q ${zipPath} -d ${TMP_DIR}`);
-  } else if (fs.existsSync(tarPath)) {
-    console.log('Extracting shared-node-modules.tar.gz...');
-    run(`mkdir -p ${TMP_DIR} && tar -xzf ${tarPath} -C ${TMP_DIR}`);
+  let foundArchive = null;
+  
+  // Check all possible artifact directories
+  for (const artifactDir of possibleArtifactDirs) {
+    const zipPath = path.join(artifactDir, 'shared-node-modules.zip');
+    const tarPath = path.join(artifactDir, 'shared-node-modules.tar.gz');
+    
+    if (fs.existsSync(zipPath)) {
+      foundArchive = { type: 'zip', path: zipPath };
+      console.log(`Found archive at: ${zipPath}`);
+      break;
+    } else if (fs.existsSync(tarPath)) {
+      foundArchive = { type: 'tar', path: tarPath };
+      console.log(`Found archive at: ${tarPath}`);
+      break;
+    }
+  }
+  
+  if (foundArchive) {
+    if (foundArchive.type === 'zip') {
+      console.log('Extracting shared-node-modules.zip...');
+      run(`mkdir -p ${TMP_DIR} && unzip -q ${foundArchive.path} -d ${TMP_DIR}`);
+    } else {
+      console.log('Extracting shared-node-modules.tar.gz...');
+      run(`mkdir -p ${TMP_DIR} && tar -xzf ${foundArchive.path} -C ${TMP_DIR}`);
+    }
   } else {
     console.error('ERROR: Shared node_modules archive not found!');
+    console.error('Checked locations:');
+    possibleArtifactDirs.forEach(dir => {
+      console.error(`  - ${path.join(dir, 'shared-node-modules.zip')}`);
+      console.error(`  - ${path.join(dir, 'shared-node-modules.tar.gz')}`);
+    });
+    console.error(`CODEBUILD_SRC_DIR: ${process.env.CODEBUILD_SRC_DIR || 'not set'}`);
+    console.error(`PROJECT_ROOT: ${PROJECT_ROOT}`);
     process.exit(1);
   }
   
