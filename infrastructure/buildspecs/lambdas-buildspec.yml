@@ -2,9 +2,12 @@ version: 0.2
 
 phases:
   install:
+    runtime-versions:
+      nodejs: 22
     # Standard images don't support runtime-versions for Node.js 20/22 (only 8, 10, 12)
     # Check if Node.js is pre-installed, otherwise use amazon-linux-extras or NodeSource
     commands:
+      - node -v  && n 22 && node -v && npm -v
       - echo "Checking for Node.js..."
       - node --version || echo "Node.js not found"
       - |
