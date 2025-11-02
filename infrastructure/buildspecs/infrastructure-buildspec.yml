@@ -13,14 +13,5 @@ phases:
     commands:
       - npm install
       - npm run build
-      - npx cdk synth
-      - npx cdk deploy --all --require-approval never --outputs-file outputs.json
-cache:
-  key: infra-$(codebuild-hash-files infrastructure/package-lock.json infrastructure/package.json)
-  paths:
-    - "infrastructure/node_modules/**/*"
-artifacts:
-  files:
-    - "infrastructure/cdk.out/**/*"
-  name: InfrastructureArtifact
-
+      - npx cdk synth --verbose
+      - npx cdk deploy --all --require-approval never --outputs-file outputs.json --verbose
