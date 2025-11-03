@@ -1,4 +1,4 @@
-import { logger, LogLevel } from '../logger';
+import { logger, LogLevel } from '../utils/logger';
 
 describe('logger', () => {
   const originalEnv = process.env.LOG_LEVEL;
@@ -158,6 +158,15 @@ describe('logger', () => {
       process.env.LOG_LEVEL = 'info';
       logger.reset();
       expect(logger.getLevel()).toBe(LogLevel.INFO);
+    });
+
+    it('should warn and default to ERROR for invalid LOG_LEVEL value', () => {
+      process.env.LOG_LEVEL = 'INVALID_VALUE';
+      logger.reset();
+      expect(logger.getLevel()).toBe(LogLevel.ERROR);
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid LOG_LEVEL "INVALID_VALUE"')
+      );
     });
   });
 });

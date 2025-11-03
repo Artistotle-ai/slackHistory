@@ -492,6 +492,212 @@ describe('stream-handler', () => {
       // Verify that the message was marked as failed
       expect(mockMarkMessageFailed).toHaveBeenCalled();
     });
+
+    it('should handle markMessageFailed error gracefully', async () => {
+      const messageItem = {
+        itemId: 'message#T123#C456',
+        type: 'message',
+        team_id: 'T123',
+        channel_id: 'C456',
+        ts: '1234567890.123456',
+        files: [{ id: 'file1', url_private: 'https://files.slack.com/files-pri/file1' }],
+      };
+
+      const record = {
+        eventName: 'INSERT',
+        dynamodb: {
+          NewImage: messageItem,
+        },
+      };
+
+      mockUnmarshallUtil.mockReturnValue(messageItem);
+      const criticalError = new Error('Token refresh failed');
+      mockProcessMessageFiles.mockRejectedValue(criticalError);
+      
+      const markFailedError = new Error('Mark failed error');
+      mockMarkMessageFailed.mockRejectedValue(markFailedError);
+
+      // Should not throw - error is caught and logged
+      await processStreamRecord(
+        record as any,
+        oauthConfig,
+        bucketName,
+        s3Client,
+        clientId,
+        clientSecret
+      );
+
+      expect(mockMarkMessageFailed).toHaveBeenCalled();
+      expect(shared.logger.error).toHaveBeenCalledWith(
+        'Failed to mark record as failed',
+        markFailedError
+      );
+    });
+
+    it('should handle non-Error exceptions when marking failed', async () => {
+      const messageItem = {
+        itemId: 'message#T123#C456',
+        type: 'message',
+        team_id: 'T123',
+        channel_id: 'C456',
+        ts: '1234567890.123456',
+        files: [{ id: 'file1', url_private: 'https://files.slack.com/files-pri/file1' }],
+      };
+
+      const record = {
+        eventName: 'INSERT',
+        dynamodb: {
+          NewImage: messageItem,
+        },
+      };
+
+      mockUnmarshallUtil.mockReturnValue(messageItem);
+      mockProcessMessageFiles.mockRejectedValue('String error');
+
+      await processStreamRecord(
+        record as any,
+        oauthConfig,
+        bucketName,
+        s3Client,
+        clientId,
+        clientSecret
+      );
+
+      expect(mockMarkMessageFailed).toHaveBeenCalledWith(
+        oauthConfig.tableName,
+        messageItem,
+        expect.any(Error)
+      );
+    });
+
+    it('should skip when OldImage unmarshalling fails', async () => {
+      const channelItem = {
+        itemId: 'channel#T123',
+        team_id: 'T123',
+        channel_id: 'C456',
+        name: 'test-channel',
+      };
+
+      const record = {
+        eventName: 'MODIFY',
+        dynamodb: {
+          NewImage: channelItem,
+          OldImage: null,
+        },
+      };
+
+      mockUnmarshallUtil
+        .mockReturnValueOnce(channelItem)
+        .mockReturnValueOnce(null);
+
+      await processStreamRecord(
+        record as any,
+        oauthConfig,
+        bucketName,
+        s3Client,
+        clientId,
+        clientSecret
+      );
+
+      expect(mockMaintainChannelIndex).toHaveBeenCalledWith(
+        oauthConfig.tableName,
+        channelItem,
+        undefined
+      );
+    });
+
+
+
+
+
+    it('should handle item with type undefined', async () => {
+      const item = {
+        itemId: 'other#T123',
+        // type is undefined
+      };
+
+      const record = {
+        eventName: 'INSERT',
+        dynamodb: {
+          NewImage: item,
+        },
+      };
+
+      mockUnmarshallUtil.mockReturnValue(item);
+
+      await processStreamRecord(
+        record as any,
+        oauthConfig,
+        bucketName,
+        s3Client,
+        clientId,
+        clientSecret
+      );
+
+      expect(mockProcessMessageFiles).not.toHaveBeenCalled();
+    });
+
+    it('should handle item with files as empty array', async () => {
+      const messageItem = {
+        itemId: 'message#T123#C456',
+        type: 'message',
+        team_id: 'T123',
+        channel_id: 'C456',
+        ts: '1234567890.123456',
+        files: [], // Empty array
+      };
+
+      const record = {
+        eventName: 'INSERT',
+        dynamodb: {
+          NewImage: messageItem,
+        },
+      };
+
+      mockUnmarshallUtil.mockReturnValue(messageItem);
+
+      await processStreamRecord(
+        record as any,
+        oauthConfig,
+        bucketName,
+        s3Client,
+        clientId,
+        clientSecret
+      );
+
+      expect(mockProcessMessageFiles).not.toHaveBeenCalled();
+    });
+
+    it('should handle item with files as null', async () => {
+      const messageItem = {
+        itemId: 'message#T123#C456',
+        type: 'message',
+        team_id: 'T123',
+        channel_id: 'C456',
+        ts: '1234567890.123456',
+        files: null,
+      };
+
+      const record = {
+        eventName: 'INSERT',
+        dynamodb: {
+          NewImage: messageItem,
+        },
+      };
+
+      mockUnmarshallUtil.mockReturnValue(messageItem);
+
+      await processStreamRecord(
+        record as any,
+        oauthConfig,
+        bucketName,
+        s3Client,
+        clientId,
+        clientSecret
+      );
+
+      expect(mockProcessMessageFiles).not.toHaveBeenCalled();
+    });
   });
 });
 

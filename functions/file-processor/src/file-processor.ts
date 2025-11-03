@@ -3,6 +3,7 @@
 let s3ClientModule: typeof import('@aws-sdk/client-s3') | null = null;
 let httpModule: typeof import('http') | null = null;
 let httpsModule: typeof import('https') | null = null;
+let streamModule: typeof import('stream') | null = null;
 
 import { getValidBotToken, logger } from 'mnemosyne-slack-shared';
 import { OAuthConfig } from 'mnemosyne-slack-shared';
@@ -38,6 +39,16 @@ function getHttpsModule() {
 }
 
 /**
+ * Lazy load Stream module
+ */
+function getStreamModule() {
+  if (!streamModule) {
+    streamModule = require('stream') as typeof import('stream');
+  }
+  return streamModule;
+}
+
+/**
  * Stream file from Slack to S3 without loading into memory
  * 
  * This function streams data directly from Slack's API response to S3,
@@ -68,8 +79,16 @@ async function streamFileFromSlackToS3(
     // Parse URL to determine protocol (https/http)
     const urlObj = new URL(url);
     const protocol = urlObj.protocol === 'https:' ? https : http;
+    const streamMod = getStreamModule();
+
+    // Use PassThrough stream as intermediary to handle errors better
+    // This allows proper error handling and prevents "non-retryable streaming request" errors
+    const passThrough = new streamMod.PassThrough();
+    let uploadStarted = false;
+    let uploadCompleted = false;
 
     // Configure HTTP request to Slack API
+    // Set timeout to prevent hanging requests (5 minutes max for large files)
     const options = {
       hostname: urlObj.hostname,
       path: urlObj.pathname + urlObj.search,
@@ -77,39 +96,94 @@ async function streamFileFromSlackToS3(
       headers: {
         'Authorization': `Bearer ${botToken}`,
       },
+      timeout: 300000, // 5 minutes timeout for large file downloads
     };
 
     // Create HTTP request and handle response
+    logger.debug(`Starting download from Slack: ${urlObj.hostname}${urlObj.pathname}`);
     const req = protocol.request(options, (res) => {
       // Check for non-200 status codes
       if (res.statusCode !== 200) {
-        reject(new Error(`Failed to download file: HTTP ${res.statusCode}`));
+        res.resume(); // Drain response to free up memory
+        const error = new Error(`Failed to download file: HTTP ${res.statusCode}`);
+        logger.warn(`HTTP error downloading file: ${res.statusCode} for ${s3Key}`);
+        reject(error);
         return;
       }
 
-      // Stream response directly to S3 (no intermediate buffering)
-      // This allows handling files larger than Lambda memory without OOM errors
+      logger.debug(`HTTP response received: ${res.statusCode}, starting S3 upload for ${s3Key}`);
+
+      // Handle HTTP response stream errors
+      res.on('error', (err: Error) => {
+        if (!uploadCompleted) {
+          passThrough.destroy();
+          logger.error(`HTTP stream error for ${s3Key}`, err);
+          reject(new Error(`HTTP stream error: ${err.message}`));
+        }
+      });
+
+      // Handle premature stream close
+      res.on('close', () => {
+        if (!uploadCompleted && !passThrough.destroyed) {
+          logger.warn(`HTTP stream closed prematurely for ${s3Key}`);
+          passThrough.end();
+        }
+      });
+
+      // Pipe HTTP response to PassThrough stream
+      // This intermediate stream allows better error handling
+      res.pipe(passThrough);
+
+      // Stream to S3 using PassThrough stream
+      // This allows proper error handling and prevents non-retryable errors
       const uploadParams = {
         Bucket: bucketName,
         Key: s3Key,
-        Body: res, // Stream directly from HTTP response to S3
+        Body: passThrough,
         ContentType: contentType || res.headers['content-type'] || 'application/octet-stream',
       };
+
+      uploadStarted = true;
 
       // Upload stream to S3
       s3Client.send(new s3Module.PutObjectCommand(uploadParams))
         .then(() => {
-          logger.debug(`Successfully uploaded ${s3Key}`);
+          uploadCompleted = true;
+          logger.info(`Successfully uploaded ${s3Key} to S3`);
           resolve();
         })
         .catch((err: any) => {
+          uploadCompleted = true;
+          if (!passThrough.destroyed) {
+            passThrough.destroy();
+          }
+          logger.error(`S3 upload failed for ${s3Key}`, err);
           reject(new Error(`Failed to upload to S3: ${err.message}`));
         });
     });
 
     // Handle request errors (network issues, connection failures)
     req.on('error', (err: Error) => {
-      reject(new Error(`Failed to download from Slack: ${err.message}`));
+      if (!uploadStarted) {
+        logger.error(`HTTP request error before upload started for ${s3Key}`, err);
+        reject(new Error(`Failed to download from Slack: ${err.message}`));
+      } else if (!passThrough.destroyed) {
+        passThrough.destroy();
+        logger.error(`HTTP request error after upload started for ${s3Key}`, err);
+        reject(new Error(`Request error after upload started: ${err.message}`));
+      }
+    });
+
+    // Handle request timeout
+    req.on('timeout', () => {
+      req.destroy();
+      logger.warn(`Request timeout for ${s3Key}`);
+      if (!uploadStarted) {
+        reject(new Error('Request timeout'));
+      } else if (!passThrough.destroyed) {
+        passThrough.destroy();
+        reject(new Error('Request timeout after upload started'));
+      }
     });
 
     // Send the request
@@ -152,7 +226,7 @@ async function retryWithBackoff<T>(
       // Attempt 2: 2000ms (2s)
       // Attempt 3: 4000ms (4s)
       const delayMs = baseDelayMs * Math.pow(2, attempt - 1);
-      logger.debug(`Attempt ${attempt} failed, retrying in ${delayMs}ms...`);
+      logger.warn(`Attempt ${attempt}/${maxAttempts} failed, retrying in ${delayMs}ms...`, lastError);
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }
@@ -178,7 +252,7 @@ export async function processFile(
 
   const s3Key = `slack/${teamId}/${channelId}/${ts}/${file.id}`;
 
-  logger.debug(`Processing file: ${file.id} (${file.name || 'unnamed'})`);
+  logger.info(`Processing file: ${file.id} (${file.name || 'unnamed'}) -> ${s3Key}`);
 
   // Stream file from Slack to S3 with retry logic
   await retryWithBackoff(

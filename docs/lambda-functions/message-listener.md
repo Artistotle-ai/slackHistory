@@ -4,14 +4,6 @@ Receives Slack Events API webhooks, validates signatures, routes events to handl
 
 **Implementation:** [`../../functions/message-listener/src/index.ts`](../../functions/message-listener/src/index.ts)
 
-## Specification
-
-- **Runtime:** Node.js 22, ARM64
-- **Memory:** 256 MB
-- **Timeout:** 30 seconds
-- **Trigger:** Lambda Function URL (public)
-- **Response Time:** < 3 seconds
-
 ## Environment Variables
 
 - `SLACK_ARCHIVE_TABLE` - DynamoDB table name

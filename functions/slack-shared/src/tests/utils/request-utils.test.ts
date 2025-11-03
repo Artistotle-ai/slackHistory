@@ -4,7 +4,7 @@ import {
   createErrorResponse,
   createSuccessJsonResponse,
   createSuccessHtmlResponse,
-} from '../request-utils';
+} from '../../utils/request-utils';
 import { LambdaFunctionURLRequest } from '../../config/types';
 
 describe('request-utils', () => {

@@ -1,7 +1,7 @@
-import { loadOAuthConfig, getOAuthCredentials, OAuthConfig } from '../oauth-config';
+import { loadOAuthConfig, getOAuthCredentials, OAuthConfig } from '../../config/oauth-config';
 import * as secretsUtils from '../../utils/secrets-utils';
 import * as cache from '../../utils/cache';
-import { SECRET_CACHE_TTL } from '../settings';
+import { SECRET_CACHE_TTL } from '../../config/settings';
 
 jest.mock('../../utils/secrets-utils');
 jest.mock('../../utils/cache');

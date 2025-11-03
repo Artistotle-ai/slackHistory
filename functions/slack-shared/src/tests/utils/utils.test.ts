@@ -6,7 +6,7 @@ import {
   getTokenItemCacheKey,
   getTokenItemDbId,
   formatErrorMessage,
-} from '../utils';
+} from '../../utils/utils';
 
 describe('utils', () => {
   describe('capArray', () => {

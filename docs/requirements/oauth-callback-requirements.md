@@ -6,10 +6,7 @@
 
 ## Technical Specifications
 
-- **Runtime:** Node.js 22, ARM64
-- **Memory:** 256 MB
-- **Timeout:** 10 seconds
-- **Trigger:** Lambda Function URL (public, no auth)
+
 
 **Environment Variables:**
 - `SLACK_ARCHIVE_TABLE` - DynamoDB table name
@@ -71,7 +68,11 @@ If `token_rotation_enabled: true` in Slack app:
 - Refresh via `https://slack.com/api/oauth.v2.access` with `grant_type=refresh_token`, `refresh_token`
 - Update DynamoDB item with new tokens
 
-**Scheduled refresh:** EventBridge rule → Lambda checks `expires_at`, refreshes 24h before expiry.
+**On-demand refresh:** ✅ IMPLEMENTED
+- Functions check token expiry before API calls using `getValidBotToken()` from `mnemosyne-slack-shared`
+- Tokens refresh automatically when expired or expiring within 1/3 of TTL
+- No scheduled Lambda required - refresh happens on-demand when needed
+- Prevents accumulation of expired tokens and reduces infrastructure costs
 
 ---
 

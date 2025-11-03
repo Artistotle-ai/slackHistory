@@ -81,7 +81,7 @@ export class EventRepository<T extends BaseSlackEvent, TItem extends Record<stri
     const cacheKey = this.config.getCacheKey(event);
     
     // Check cache first
-    const cached = getFromCache<TItem>(cacheKey);
+    const cached = await getFromCache<TItem>(cacheKey);
     if (cached) {
       return cached;
     }

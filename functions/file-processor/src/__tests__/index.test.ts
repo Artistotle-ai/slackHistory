@@ -310,5 +310,26 @@ describe('handler', () => {
       expect(result.message).toBe('Processed 2 records');
     });
   });
+
+  describe('lazy loading error paths', () => {
+    it('should handle config loading errors properly', async () => {
+      // Test that config loading errors are handled properly
+      // The handler calls getConfigModule which calls loadConfig
+      // If loadConfig throws, the error should propagate
+      const event = createStreamEvent([createStreamRecord()]);
+      const context = {} as Context;
+
+      const configModule = require('../config');
+      
+      // Make config loading fail on next call - this tests the error path
+      // Since config is already loaded in other tests, we mock it to throw
+      configModule.loadConfig.mockImplementationOnce(() => {
+        throw new Error('Config loading failed');
+      });
+
+      // Handler should throw when config loading fails in getConfigModule
+      await expect(handler(event, context)).rejects.toThrow('Config loading failed');
+    });
+  });
 });
 

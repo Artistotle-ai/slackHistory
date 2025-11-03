@@ -45,7 +45,7 @@ describe('channel-handlers', () => {
     process.env.SLACK_ARCHIVE_TABLE = 'test-table';
     
     // Import handlers - they'll use the mocked dynamodb module
-    const handlers = await import('../handlers/channel-handlers');
+    const handlers = await import('../handlers/channel-handlers.js');
     handleChannelCreated = handlers.handleChannelCreated;
     handleChannelRename = handlers.handleChannelRename;
     handleChannelDeleted = handlers.handleChannelDeleted;
@@ -132,9 +132,10 @@ describe('channel-handlers', () => {
 
       mockPutItem.mockResolvedValue(undefined);
 
-      // Mock the shared module functions
-      const mockGetValidBotToken = jest.fn().mockResolvedValue('xoxb-token-123');
-      const mockGetSecretValue = jest.fn()
+      // Mock the shared module functions - they're already mocked at module level
+      const sharedModule = require('mnemosyne-slack-shared');
+      sharedModule.getValidBotToken.mockResolvedValue('xoxb-token-123');
+      sharedModule.getSecretValue
         .mockResolvedValueOnce('client-id-123')
         .mockResolvedValueOnce('client-secret-456');
 
@@ -144,21 +145,19 @@ describe('channel-handlers', () => {
         json: async () => ({ ok: true }),
       });
 
-      // Mock the dynamic import
-      jest.doMock('mnemosyne-slack-shared', () => ({
-        ...jest.requireActual('mnemosyne-slack-shared'),
-        getValidBotToken: mockGetValidBotToken,
-        getSecretValue: mockGetSecretValue,
-      }));
-
       await handleChannelCreated(event, teamId);
 
       expect(mockPutItem).toHaveBeenCalledTimes(1);
-      // Note: The auto-join logic will try to execute but may fail in test environment
-      // The important part is that it doesn't fail the handler
+      // Verify auto-join was attempted
+      expect(sharedModule.getSecretValue).toHaveBeenCalledTimes(2);
+      expect(sharedModule.getValidBotToken).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://slack.com/api/conversations.join',
+        expect.any(Object)
+      );
     });
 
-    it('should handle auto-join failures gracefully', async () => {
+    it('should handle auto-join failures gracefully when credentials are missing', async () => {
       const event = {
         type: 'channel_created',
         team_id: 'T123456',
@@ -174,13 +173,77 @@ describe('channel-handlers', () => {
       mockPutItem.mockResolvedValue(undefined);
 
       // Mock getSecretValue to return null to trigger error
-      const mockGetSecretValue = jest.fn().mockResolvedValue(null);
-      jest.doMock('mnemosyne-slack-shared', () => ({
-        ...jest.requireActual('mnemosyne-slack-shared'),
-        getSecretValue: mockGetSecretValue,
-      }));
+      const sharedModule = require('mnemosyne-slack-shared');
+      sharedModule.getSecretValue.mockResolvedValue(null);
 
       // Handler should not throw even if auto-join fails
+      await expect(handleChannelCreated(event, teamId)).resolves.not.toThrow();
+      expect(mockPutItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle auto-join failures gracefully when joinChannel fails', async () => {
+      const event = {
+        type: 'channel_created',
+        team_id: 'T123456',
+        channel: {
+          id: 'C123456',
+          name: 'public-channel',
+          is_private: false,
+        },
+        event_ts: '1234567890.123456',
+      } as any;
+      const teamId = 'T123456';
+
+      mockPutItem.mockResolvedValue(undefined);
+
+      // Mock the shared module functions
+      const sharedModule = require('mnemosyne-slack-shared');
+      sharedModule.getValidBotToken.mockResolvedValue('xoxb-token-123');
+      sharedModule.getSecretValue
+        .mockResolvedValueOnce('client-id-123')
+        .mockResolvedValueOnce('client-secret-456');
+
+      // Mock fetch to fail
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: false, error: 'cant_invite_self' }),
+      });
+
+      // Handler should not throw even if joinChannel fails
+      await expect(handleChannelCreated(event, teamId)).resolves.not.toThrow();
+      expect(mockPutItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle auto-join failures gracefully when HTTP request fails', async () => {
+      const event = {
+        type: 'channel_created',
+        team_id: 'T123456',
+        channel: {
+          id: 'C123456',
+          name: 'public-channel',
+          is_private: false,
+        },
+        event_ts: '1234567890.123456',
+      } as any;
+      const teamId = 'T123456';
+
+      mockPutItem.mockResolvedValue(undefined);
+
+      // Mock the shared module functions
+      const sharedModule = require('mnemosyne-slack-shared');
+      sharedModule.getValidBotToken.mockResolvedValue('xoxb-token-123');
+      sharedModule.getSecretValue
+        .mockResolvedValueOnce('client-id-123')
+        .mockResolvedValueOnce('client-secret-456');
+
+      // Mock fetch to return HTTP error
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      });
+
+      // Handler should not throw even if HTTP request fails
       await expect(handleChannelCreated(event, teamId)).resolves.not.toThrow();
       expect(mockPutItem).toHaveBeenCalledTimes(1);
     });
@@ -659,6 +722,283 @@ describe('channel-handlers', () => {
           ':visibility': 'public',
         })
       );
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should handle channel_created without event_ts', async () => {
+      const event = {
+        type: 'channel_created',
+        team_id: 'T123456',
+        channel: {
+          id: 'C123456',
+          name: 'test-channel',
+          is_private: false,
+        },
+        // No event_ts
+      } as any;
+      const teamId = 'T123456';
+
+      mockPutItem.mockResolvedValue(undefined);
+
+      await handleChannelCreated(event, teamId);
+
+      expect(mockPutItem).toHaveBeenCalledTimes(1);
+      const putCall = mockPutItem.mock.calls[0];
+      const item = putCall[1];
+      // Should have a timestamp (either from event_ts or generated)
+      expect(item.timestamp).toBeDefined();
+    });
+
+    it('should handle channel_rename without event_ts', async () => {
+      const event = {
+        type: 'channel_rename',
+        team_id: 'T123456',
+        channel: {
+          id: 'C123456',
+          name: 'new-name',
+        },
+        // No event_ts
+      } as any;
+      const teamId = 'T123456';
+
+      mockGetLatestItem.mockResolvedValue(null);
+      mockPutItem.mockResolvedValue(undefined);
+
+      await handleChannelRename(event, teamId);
+
+      expect(mockPutItem).toHaveBeenCalledTimes(1);
+      const putCall = mockPutItem.mock.calls[0];
+      const item = putCall[1];
+      // Should have a timestamp (either from event_ts or generated)
+      expect(item.timestamp).toBeDefined();
+    });
+
+    it('should handle channel_id_changed without event_ts', async () => {
+      const event = {
+        type: 'channel_id_changed',
+        team_id: 'T123456',
+        old_channel_id: 'C123456',
+        new_channel_id: 'C789012',
+        // No event_ts
+      } as any;
+      const teamId = 'T123456';
+      const oldChannelId = 'C123456';
+      const newChannelId = 'C789012';
+
+      mockGetLatestItem.mockResolvedValue(null);
+      mockPutItem.mockResolvedValue(undefined);
+
+      await handleChannelIdChanged(event, teamId, oldChannelId, newChannelId);
+
+      expect(mockPutItem).toHaveBeenCalledTimes(1);
+      const putCall = mockPutItem.mock.calls[0];
+      const item = putCall[1];
+      // Should have a timestamp (either from event_ts or generated)
+      expect(item.timestamp).toBeDefined();
+    });
+
+    it('should handle channel_purpose without purpose value', async () => {
+      const event = {
+        type: 'channel_purpose',
+        team_id: 'T123456',
+        channel: 'C123456',
+        event_ts: '1234567890.123456',
+        // No purpose field
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      mockGetLatestItem.mockResolvedValue({
+        itemId: 'channel#T123456#C123456',
+        timestamp: '1234567890.000000',
+      });
+      mockUpdateItem.mockResolvedValue(undefined);
+
+      await handleChannelPurposeOrTopic(event, teamId, channelId, 'purpose');
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      const updateCall = mockUpdateItem.mock.calls[0];
+      expect(updateCall[3][':value']).toBe(''); // Empty string when purpose is undefined
+    });
+
+    it('should handle channel_topic without topic value', async () => {
+      const event = {
+        type: 'channel_topic',
+        team_id: 'T123456',
+        channel: 'C123456',
+        event_ts: '1234567890.123456',
+        // No topic field
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      mockGetLatestItem.mockResolvedValue({
+        itemId: 'channel#T123456#C123456',
+        timestamp: '1234567890.000000',
+      });
+      mockUpdateItem.mockResolvedValue(undefined);
+
+      await handleChannelPurposeOrTopic(event, teamId, channelId, 'topic');
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      const updateCall = mockUpdateItem.mock.calls[0];
+      expect(updateCall[3][':value']).toBe(''); // Empty string when topic is undefined
+    });
+
+    it('should handle channel_purpose with purpose from different event type', async () => {
+      // Test that purpose field is extracted correctly even if event type doesn't match
+      const event = {
+        type: 'channel_topic', // Wrong type, but we're testing purpose extraction
+        team_id: 'T123456',
+        channel: 'C123456',
+        purpose: 'Test purpose', // Purpose field exists
+        event_ts: '1234567890.123456',
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      mockGetLatestItem.mockResolvedValue({
+        itemId: 'channel#T123456#C123456',
+        timestamp: '1234567890.000000',
+      });
+      mockUpdateItem.mockResolvedValue(undefined);
+
+      await handleChannelPurposeOrTopic(event, teamId, channelId, 'purpose');
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      const updateCall = mockUpdateItem.mock.calls[0];
+      // Should use empty string when field doesn't match event type
+      expect(updateCall[3][':value']).toBe('');
+    });
+
+    it('should handle channel_topic with topic from different event type', async () => {
+      // Test that topic field is extracted correctly even if event type doesn't match
+      const event = {
+        type: 'channel_purpose', // Wrong type, but we're testing topic extraction
+        team_id: 'T123456',
+        channel: 'C123456',
+        topic: 'Test topic', // Topic field exists
+        event_ts: '1234567890.123456',
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      mockGetLatestItem.mockResolvedValue({
+        itemId: 'channel#T123456#C123456',
+        timestamp: '1234567890.000000',
+      });
+      mockUpdateItem.mockResolvedValue(undefined);
+
+      await handleChannelPurposeOrTopic(event, teamId, channelId, 'topic');
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      const updateCall = mockUpdateItem.mock.calls[0];
+      // Should use empty string when field doesn't match event type
+      expect(updateCall[3][':value']).toBe('');
+    });
+
+    it('should handle updateChannelItem when currentChannel timestamp is missing', async () => {
+      const event = {
+        type: 'channel_deleted',
+        team_id: 'T123456',
+        channel: 'C123456',
+        event_ts: '1234567890.123456',
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      // Mock channel without timestamp
+      mockGetLatestItem.mockResolvedValue({
+        itemId: 'channel#T123456#C123456',
+        // No timestamp
+      });
+      mockUpdateItem.mockResolvedValue(undefined);
+
+      await handleChannelDeleted(event, teamId, channelId);
+
+      expect(mockGetLatestItem).toHaveBeenCalledTimes(1);
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      const updateCall = mockUpdateItem.mock.calls[0];
+      // Should use event_ts when currentChannel timestamp is missing
+      expect(updateCall[1].timestamp).toBe('1234567890.123456');
+    });
+
+    it('should handle channel_rename when existing history is missing', async () => {
+      const event = {
+        type: 'channel_rename',
+        team_id: 'T123456',
+        channel: {
+          id: 'C123456',
+          name: 'new-name',
+        },
+        event_ts: '1234567890.123456',
+      } as any;
+      const teamId = 'T123456';
+
+      // Mock channel without names_history
+      mockGetLatestItem
+        .mockResolvedValueOnce({
+          itemId: 'channel#T123456#C123456',
+          timestamp: '1234567890.000000',
+          name: 'old-name',
+          // No names_history
+        })
+        .mockResolvedValueOnce({
+          itemId: 'channel#T123456#C123456',
+          timestamp: '1234567890.000000',
+        });
+      mockUpdateItem.mockResolvedValue(undefined);
+
+      await handleChannelRename(event, teamId);
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      const updateCall = mockUpdateItem.mock.calls[0];
+      const namesHistory = updateCall[3][':names_history'];
+      // Should use current name as fallback when names_history is missing
+      expect(namesHistory).toContain('new-name');
+    });
+
+    it('should handle lazy loading of shared modules (lines 10-11, 16, 21-23)', async () => {
+      // Test that dynamic imports are lazy loaded
+      // This covers the lazy loading paths in channel-handlers.ts
+      const event = {
+        type: 'channel_created',
+        team_id: 'T123456',
+        channel: {
+          id: 'C123456',
+          name: 'test-channel',
+          is_private: false,
+        },
+        event_ts: '1234567890.123456',
+      } as any;
+      const teamId = 'T123456';
+
+      mockPutItem.mockResolvedValue(undefined);
+
+      // Mock shared module functions
+      const sharedModule = require('mnemosyne-slack-shared');
+      sharedModule.getValidBotToken.mockResolvedValue('xoxb-token-123');
+      sharedModule.getSecretValue
+        .mockResolvedValueOnce('client-id-123')
+        .mockResolvedValueOnce('client-secret-456');
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      });
+
+      // First call - modules are lazy loaded
+      await handleChannelCreated(event, teamId);
+
+      // Verify modules were imported (dynamic import happens)
+      expect(sharedModule.getSecretValue).toHaveBeenCalled();
+
+      // Second call - modules should already be loaded
+      await handleChannelCreated(event, teamId);
+      
+      // Modules should still be accessible (already imported)
+      expect(sharedModule.getSecretValue).toHaveBeenCalledTimes(4); // 2 calls * 2 secrets each
     });
   });
 });

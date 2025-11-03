@@ -5,17 +5,17 @@
 **Scope:** Minimal CDK infra instructions for Slack History MVP.
 
 **Defaults & constraints:**
-- Language: TypeScript CDK v2.221.1+, Node.js 22+
-- Application prefix: Mnemosyne
-- Environment: Single production environment (no staging/dev in MVP scope)
-- Region: eu-west-1
-- Lambda Function URLs (AuthType.NONE) for Slack Events API; validate Slack signing secrets in handler.
-- Single S3 artifact bucket reused across pipelines.
-- No inline lambdas or buildspecs; external files in `infrastructure/buildspecs/`.
-- GitHub connection via AWS CodeStar; manual auth after first deploy.
-- CI role: permissions to execute deployments
-- Secrets Manager: Slack bot token and Slack signing secret placeholders
-- Pipeline trigger: main branch
+- Language: TypeScript CDK v2.221.1+, Node.js 20+ ✅ IMPLEMENTED
+- Application prefix: Mnemosyne ✅ IMPLEMENTED
+- Environment: Single production environment (no staging/dev in MVP scope) ✅ IMPLEMENTED
+- Region: eu-west-1 (configurable via AWS_REGION) ✅ IMPLEMENTED
+- Lambda Function URLs (AuthType.NONE) for Slack Events API; validate Slack signing secrets in handler ✅ IMPLEMENTED
+- Single S3 artifact bucket reused across pipelines ✅ IMPLEMENTED
+- No inline lambdas or buildspecs; external files in `infrastructure/buildspecs/` ✅ IMPLEMENTED
+- GitHub connection via AWS CodeStar; manual auth after first deploy ✅ IMPLEMENTED
+- CI role: permissions to execute deployments ✅ IMPLEMENTED
+- Secrets Manager: Slack credentials (signing secret, client ID, client secret) ✅ IMPLEMENTED
+- Pipeline trigger: main branch ✅ IMPLEMENTED
 
 ---
 
@@ -42,20 +42,24 @@ repo/
 ---
 
 ## Stacks
-1. **BaseRolesStack**
-   - S3 artifact bucket, Secrets Manager placeholders, CI role
+1. **BaseRolesStack** ✅ IMPLEMENTED
+   - S3 artifact bucket ✅ IMPLEMENTED
+   - Secrets Manager placeholders (signing secret, client ID, client secret) ✅ IMPLEMENTED
+   - GitHub CodeStar connection ✅ IMPLEMENTED
 
-2. **MainInfraStack**
-   - DynamoDB single table `SlackArchive` (PK= `itemId`, SK=`timestamp`, GSI for threads)
-   - S3 bucket for Slack files
-   - Lambda `message-listener` (Function URL) and `file-processor` (stream processing)
-   - Lambda permissions: DDB access, S3 write, Secrets Manager read
+2. **MainInfraStack** ✅ IMPLEMENTED
+   - DynamoDB single table `SlackArchive` (PK= `itemId`, SK=`timestamp`, GSI for threads) ✅ IMPLEMENTED
+   - DynamoDB Stream (NEW_AND_OLD_IMAGES) ✅ IMPLEMENTED
+   - S3 bucket for Slack files ✅ IMPLEMENTED
+   - Lambda `message-listener` (Function URL, DLQ) ✅ IMPLEMENTED
+   - Lambda `file-processor` (stream processing, reserved concurrency: 1) ✅ IMPLEMENTED
+   - Lambda `oauth-callback` (Function URL) ✅ IMPLEMENTED
+   - Lambda permissions: DDB access, S3 write, Secrets Manager read ✅ IMPLEMENTED
 
-3. **Pipeline stacks**
-   - **Infra pipeline**: triggers on all main branch pushes, combined CDK build & deploy (external buildspec)
-   - **Listener pipeline**: triggers on all main branch pushes, combined Lambda build & deploy
-   - **DDB stream pipeline**: triggers on all main branch pushes, combined Lambda build & deploy
-   - All buildspecs are external files (no inline buildspecs)
+3. **Pipeline stacks** ✅ IMPLEMENTED
+   - **PipelineInfraStack**: triggers on all main branch pushes, combined CDK build & deploy (external buildspec) ✅ IMPLEMENTED
+   - **PipelineLambdasStack**: unified pipeline for all Lambda functions ✅ IMPLEMENTED
+   - All buildspecs are external files ✅ IMPLEMENTED
 
 ## Cross-Stack Dependencies
 Pipeline stacks create their own dedicated CI roles and use static resource references to avoid cyclic dependencies. Each pipeline is self-contained and doesn't depend on other stacks.

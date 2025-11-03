@@ -239,6 +239,212 @@ describe('message-handlers', () => {
         })
       );
     });
+
+    it('should create new message if update fails with ResourceNotFoundException', async () => {
+      const event = {
+        type: 'message',
+        subtype: 'message_changed',
+        team_id: 'T123456',
+        channel: 'C123456',
+        message: {
+          type: 'message',
+          ts: '1234567890.123456',
+          text: 'New',
+        },
+        event_ts: '1234567891.123456',
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      const resourceNotFoundError = { code: 'ResourceNotFoundException' };
+      mockUpdateItem.mockRejectedValueOnce(resourceNotFoundError);
+      mockPutItem.mockResolvedValue(undefined);
+
+      await handleMessageChanged(event, teamId, channelId);
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      expect(mockPutItem).toHaveBeenCalledTimes(1);
+      expect(mockPutItem).toHaveBeenCalledWith(
+        'test-table',
+        expect.objectContaining({
+          itemId: 'message#T123456#C123456',
+          timestamp: '1234567890.123456',
+        })
+      );
+    });
+
+    it('should re-throw unexpected errors', async () => {
+      const event = {
+        type: 'message',
+        subtype: 'message_changed',
+        team_id: 'T123456',
+        channel: 'C123456',
+        message: {
+          type: 'message',
+          ts: '1234567890.123456',
+          text: 'Updated',
+        },
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      const unexpectedError = { code: 'ThrottlingException', message: 'Rate exceeded' };
+      mockUpdateItem.mockRejectedValueOnce(unexpectedError);
+
+      await expect(handleMessageChanged(event, teamId, channelId)).rejects.toEqual(unexpectedError);
+      expect(mockPutItem).not.toHaveBeenCalled();
+    });
+
+    it('should handle message_changed with user field', async () => {
+      const event = {
+        type: 'message',
+        subtype: 'message_changed',
+        team_id: 'T123456',
+        channel: 'C123456',
+        message: {
+          type: 'message',
+          ts: '1234567890.123456',
+          text: 'Updated',
+          user: 'U123456',
+        },
+        edited: {
+          ts: '1234567891.123456',
+        },
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      mockUpdateItem.mockResolvedValue(undefined);
+
+      await handleMessageChanged(event, teamId, channelId);
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      expect(mockUpdateItem).toHaveBeenCalledWith(
+        'test-table',
+        expect.objectContaining({
+          itemId: 'message#T123456#C123456',
+          timestamp: '1234567890.123456',
+        }),
+        expect.stringContaining('user = :user'),
+        expect.objectContaining({
+          ':user': 'U123456',
+        })
+      );
+    });
+
+    it('should handle message_changed without user field', async () => {
+      const event = {
+        type: 'message',
+        subtype: 'message_changed',
+        team_id: 'T123456',
+        channel: 'C123456',
+        message: {
+          type: 'message',
+          ts: '1234567890.123456',
+          text: 'Updated',
+          // No user field
+        },
+        edited: {
+          ts: '1234567891.123456',
+        },
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      mockUpdateItem.mockResolvedValue(undefined);
+
+      await handleMessageChanged(event, teamId, channelId);
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      const updateCall = mockUpdateItem.mock.calls[0];
+      const updateExpression = updateCall[2];
+      // Should not include user in update expression
+      expect(updateExpression).not.toContain('user');
+      expect(updateCall[3]).not.toHaveProperty(':user');
+    });
+
+    it('should handle message_changed with empty text', async () => {
+      const event = {
+        type: 'message',
+        subtype: 'message_changed',
+        team_id: 'T123456',
+        channel: 'C123456',
+        message: {
+          type: 'message',
+          ts: '1234567890.123456',
+          text: '', // Empty text (message was cleared)
+        },
+        edited: {
+          ts: '1234567891.123456',
+        },
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      mockUpdateItem.mockResolvedValue(undefined);
+
+      await handleMessageChanged(event, teamId, channelId);
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      expect(mockUpdateItem).toHaveBeenCalledWith(
+        'test-table',
+        expect.objectContaining({
+          itemId: 'message#T123456#C123456',
+          timestamp: '1234567890.123456',
+        }),
+        expect.stringContaining('SET text = :text'),
+        expect.objectContaining({
+          ':text': '', // Empty string when text is removed
+        })
+      );
+    });
+
+    it('should throw error if message.ts is missing', async () => {
+      const event = {
+        type: 'message',
+        subtype: 'message_changed',
+        team_id: 'T123456',
+        channel: 'C123456',
+        message: {
+          type: 'message',
+          // Missing ts
+          text: 'Updated',
+        },
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      await expect(handleMessageChanged(event, teamId, channelId)).rejects.toThrow(
+        "Invalid message_changed event: missing message.ts"
+      );
+      expect(mockUpdateItem).not.toHaveBeenCalled();
+    });
+
+    it('should use event_ts as fallback for updated_ts if edited.ts is missing', async () => {
+      const event = {
+        type: 'message',
+        subtype: 'message_changed',
+        team_id: 'T123456',
+        channel: 'C123456',
+        message: {
+          type: 'message',
+          ts: '1234567890.123456',
+          text: 'Updated',
+        },
+        event_ts: '1234567891.123456',
+        // No edited.ts
+      } as any;
+      const teamId = 'T123456';
+      const channelId = 'C123456';
+
+      mockUpdateItem.mockResolvedValue(undefined);
+
+      await handleMessageChanged(event, teamId, channelId);
+
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      const updateCall = mockUpdateItem.mock.calls[0];
+      expect(updateCall[3][':updated_ts']).toBe('1234567891.123456');
+    });
   });
 
   describe('handleMessageDeleted', () => {

@@ -200,13 +200,12 @@ All handlers parse the incoming Slack event, filter out anything not related to 
 
 ## DynamoDB Stream → Lambda (concrete)
 
-**Trigger:** `INSERT` or `MODIFY` events from DynamoDB stream
+**Trigger:** `INSERT` or `MODIFY` events from DynamoDB stream (NEW_AND_OLD_IMAGES view)
 
 **Responsibilities:**
 1. File processing (download Slack files to S3)
 2. ChannelIndex maintenance (keep channel_id → name mapping updated)
 
-**Reserved Concurrency:** 1 (serializes ChannelIndex updates to prevent conflicts)
 
 ### File Processing
 

@@ -1,12 +1,16 @@
 # Lambda Layer for Shared Code
 
-This document describes the Lambda Layer implementation for sharing `slack-shared` code across all Lambda functions.
+**Status: Not implemented.** This document describes a potential Lambda Layer implementation for sharing `slack-shared` code across all Lambda functions.
 
-## Overview
+## Current Implementation
 
-Lambda Layers allow us to package shared dependencies and code separately from Lambda function code. This provides several benefits:
+Lambda functions currently package all dependencies directly in their deployment bundles. Each function includes `slack-shared` and its dependencies in the function ZIP file.
 
-- **Smaller deployment packages**: Shared code is in the layer, not duplicated in each Lambda bundle
+## Potential Benefits
+
+If implemented, Lambda Layers would allow packaging shared dependencies and code separately from Lambda function code:
+
+- **Smaller deployment packages**: Shared code in layer, not duplicated in each Lambda bundle
 - **Faster deployments**: Layer changes less frequently, so Lambda code updates are smaller
 - **Better code reuse**: All functions share the exact same `slack-shared` version
 - **Reduced cold starts**: Layer can be cached by Lambda runtime

@@ -4,14 +4,6 @@ Handles Slack OAuth installation flow. Exchanges authorization code for bot toke
 
 **Implementation:** [`../../functions/oauth-callback/src/index.ts`](../../functions/oauth-callback/src/index.ts)
 
-## Specification
-
-- **Runtime:** Node.js 22, ARM64
-- **Memory:** 256 MB
-- **Timeout:** 10 seconds
-- **Trigger:** Lambda Function URL (public)
-- **Endpoint:** GET with query parameters
-
 ## Environment Variables
 
 - `SLACK_ARCHIVE_TABLE` - DynamoDB table name

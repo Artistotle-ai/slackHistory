@@ -5,7 +5,7 @@ import {
   clearCache,
   hasInCache,
   getCacheStats,
-} from '../cache';
+} from '../../utils/cache';
 
 describe('cache', () => {
   beforeEach(() => {

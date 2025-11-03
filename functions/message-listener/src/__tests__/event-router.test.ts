@@ -262,6 +262,19 @@ describe('event-router', () => {
 
       // Should not throw, just log and continue
       await expect(routeEvent(event)).resolves.not.toThrow();
+      expect(messageHandlers.handleMessage).not.toHaveBeenCalled();
+    });
+
+    it('should handle events where team_id key is missing (not in event)', async () => {
+      const event = {
+        type: 'message',
+        // team_id key doesn't exist at all (not even undefined)
+        channel: 'C123456',
+        ts: '1234567890.123456',
+      } as any;
+
+      await routeEvent(event);
+      expect(messageHandlers.handleMessage).not.toHaveBeenCalled();
     });
 
     it('should handle events with non-string team_id', async () => {
@@ -535,6 +548,231 @@ describe('event-router', () => {
       await routeEvent(event);
 
       expect(messageHandlers.handleMessageDeleted).not.toHaveBeenCalled();
+    });
+
+    it('should handle message events without channel or channel_id', async () => {
+      const event = {
+        type: 'message',
+        team_id: 'T123456',
+        ts: '1234567890.123456',
+        // Missing channel and channel_id
+      } as any;
+
+      // Mock getMessageChannelId to return null
+      const sharedModule = require('mnemosyne-slack-shared');
+      const originalGetMessageChannelId = sharedModule.getMessageChannelId;
+      sharedModule.getMessageChannelId = jest.fn().mockReturnValueOnce(null);
+
+      await routeEvent(event);
+
+      expect(messageHandlers.handleMessage).not.toHaveBeenCalled();
+      
+      // Restore original
+      sharedModule.getMessageChannelId = originalGetMessageChannelId;
+    });
+
+    it('should handle message events without subtype or ts', async () => {
+      const event = {
+        type: 'message',
+        team_id: 'T123456',
+        channel: 'C123456',
+        // Missing subtype and ts
+      } as any;
+
+      // Mock getMessageChannelId to return null since channel validation might fail
+      const sharedModule = require('mnemosyne-slack-shared');
+      const originalGetMessageChannelId = sharedModule.getMessageChannelId;
+      sharedModule.getMessageChannelId = jest.fn().mockReturnValueOnce(null);
+
+      await routeEvent(event);
+
+      expect(messageHandlers.handleMessage).not.toHaveBeenCalled();
+      
+      // Restore original
+      sharedModule.getMessageChannelId = originalGetMessageChannelId;
+    });
+
+    it('should handle message_changed events with subtype but without message field', async () => {
+      const event = {
+        type: 'message',
+        subtype: 'message_changed',
+        team_id: 'T123456',
+        channel: 'C123456',
+        ts: '1234567890.123456',
+        // Missing message field
+      } as any;
+
+      await routeEvent(event);
+
+      expect(messageHandlers.handleMessageChanged).not.toHaveBeenCalled();
+    });
+
+    it('should handle unknown event type gracefully', async () => {
+      const event = {
+        type: 'unknown',
+        team_id: 'T123456',
+      } as any;
+
+      await routeEvent(event);
+
+      expect(messageHandlers.handleMessage).not.toHaveBeenCalled();
+      expect(channelHandlers.handleChannelCreated).not.toHaveBeenCalled();
+    });
+
+    it('should handle event with type unknown string', async () => {
+      const event = {
+        type: 'unknown',
+        // No team_id
+      } as any;
+
+      await routeEvent(event);
+
+      expect(messageHandlers.handleMessage).not.toHaveBeenCalled();
+      expect(channelHandlers.handleChannelCreated).not.toHaveBeenCalled();
+    });
+
+    it('should handle event where team_id is empty string', async () => {
+      const event = {
+        type: 'message',
+        team_id: '', // Empty string team_id
+        channel: 'C123456',
+        ts: '1234567890.123456',
+      } as any;
+
+      await routeEvent(event);
+
+      // Empty string team_id should be treated as invalid
+      expect(messageHandlers.handleMessage).not.toHaveBeenCalled();
+    });
+
+    it('should handle event with unknown type and team_id present', async () => {
+      const event = {
+        type: 'unknown',
+        team_id: 'T123456',
+      } as any;
+
+      await routeEvent(event);
+
+      expect(messageHandlers.handleMessage).not.toHaveBeenCalled();
+      expect(channelHandlers.handleChannelCreated).not.toHaveBeenCalled();
+    });
+
+    it('should handle message events with both channel and channel_id', async () => {
+      const event: MessageEvent = {
+        type: 'message',
+        team_id: 'T123456',
+        channel: 'C123456',
+        channel_id: 'C123456',
+        ts: '1234567890.123456',
+        text: 'Hello',
+      };
+
+      messageHandlers.handleMessage.mockResolvedValue(undefined);
+
+      await routeEvent(event);
+
+      expect(messageHandlers.handleMessage).toHaveBeenCalledWith(
+        event,
+        'T123456',
+        'C123456'
+      );
+    });
+
+    it('should handle channel_id_changed with previous_channel', async () => {
+      const event: ChannelIdChangedEvent = {
+        type: 'channel_id_changed',
+        team_id: 'T123456',
+        previous_channel: 'C123456',
+        channel: 'C789012',
+      };
+
+      channelHandlers.handleChannelIdChanged.mockResolvedValue(undefined);
+
+      await routeEvent(event);
+
+      expect(channelHandlers.handleChannelIdChanged).toHaveBeenCalledWith(
+        event,
+        'T123456',
+        'C123456', // oldChannelId should be previous_channel
+        'C789012'  // newChannelId should be channel
+      );
+    });
+
+    it('should handle channel_id_changed without previous_channel', async () => {
+      const event: ChannelIdChangedEvent = {
+        type: 'channel_id_changed',
+        team_id: 'T123456',
+        channel: 'C789012',
+        // No previous_channel
+      };
+
+      channelHandlers.handleChannelIdChanged.mockResolvedValue(undefined);
+
+      await routeEvent(event);
+
+      // Should use channel as both old and new when previous_channel is missing
+      expect(channelHandlers.handleChannelIdChanged).toHaveBeenCalledWith(
+        event,
+        'T123456',
+        'C789012', // oldChannelId should be channel when previous_channel is missing
+        'C789012'  // newChannelId should be channel
+      );
+    });
+
+    it('should handle lazy loading of handler modules (lines 10-11, 16, 21-23)', async () => {
+      // Test that handler modules are lazy loaded
+      // This covers the lazy loading paths in event-router.ts
+      const event: MessageEvent = {
+        type: 'message',
+        team_id: 'T123456',
+        channel: 'C123456',
+        channel_id: 'C123456',
+        ts: '1234567890.123456',
+        text: 'Hello',
+      };
+
+      messageHandlers.handleMessage.mockResolvedValue(undefined);
+
+      // First call - modules are lazy loaded
+      await routeEvent(event);
+
+      expect(messageHandlers.handleMessage).toHaveBeenCalledTimes(1);
+
+      // Second call - modules should already be loaded
+      await routeEvent(event);
+
+      // Modules should still be accessible (already imported)
+      expect(messageHandlers.handleMessage).toHaveBeenCalledTimes(2);
+      
+      // Verify handlers are imported via dynamic import (lazy loading)
+      // The handlers module is imported dynamically on first use
+      expect(messageHandlers.handleMessage).toBeDefined();
+    });
+
+    it('should handle lazy loading of channel handlers (lines 10-11, 16, 21-23)', async () => {
+      // Test that channel handler modules are lazy loaded
+      const event: ChannelCreatedEvent = {
+        type: 'channel_created',
+        team_id: 'T123456',
+        channel: {
+          id: 'C123456',
+          name: 'test-channel',
+        },
+      };
+
+      channelHandlers.handleChannelCreated.mockResolvedValue(undefined);
+
+      // First call - modules are lazy loaded
+      await routeEvent(event);
+
+      expect(channelHandlers.handleChannelCreated).toHaveBeenCalledTimes(1);
+
+      // Second call - modules should already be loaded
+      await routeEvent(event);
+
+      // Modules should still be accessible
+      expect(channelHandlers.handleChannelCreated).toHaveBeenCalledTimes(2);
+      expect(channelHandlers.handleChannelCreated).toBeDefined();
     });
   });
 });

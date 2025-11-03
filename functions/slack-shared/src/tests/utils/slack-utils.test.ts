@@ -1,4 +1,4 @@
-import { verifySlackSignature, whitelistFileMetadata, getMessageChannelId, getChannelEventChannelId } from '../slack-utils';
+import { verifySlackSignature, whitelistFileMetadata, getMessageChannelId, getChannelEventChannelId } from '../../utils/slack-utils';
 import { SlackFile, SlackFileMetadata } from '../../config/types';
 
 describe('slack-utils', () => {

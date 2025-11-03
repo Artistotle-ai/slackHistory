@@ -6,18 +6,13 @@
 
 ---
 
-## Technical Specifications
 
-- **Runtime:** Node.js 22, ARM64
-- **Memory:** 256 MB
-- **Timeout:** 30 seconds
-- **Reserved Concurrency:** None (unlimited, scales with Slack event volume)
-- **Trigger:** Lambda Function URL (public, no auth)
 
 **Environment Variables:**
-- `SLACK_ARCHIVE_TABLE` - DynamoDB table name
-- `SLACK_SIGNING_SECRET_ARN` - Secrets Manager ARN for signing secret
-- `SLACK_BOT_TOKEN_ARN` - Secrets Manager ARN (reserved for future use)
+- `SLACK_ARCHIVE_TABLE` - DynamoDB table name ✅ IMPLEMENTED
+- `SLACK_SIGNING_SECRET_ARN` - Secrets Manager ARN for signing secret ✅ IMPLEMENTED
+- `SLACK_CLIENT_ID_ARN` - Secrets Manager ARN for OAuth client ID ✅ IMPLEMENTED
+- `SLACK_CLIENT_SECRET_ARN` - Secrets Manager ARN for OAuth client secret ✅ IMPLEMENTED
 
 ---
 
@@ -280,11 +275,11 @@ SET visibility = :visibility  # "private" or "public"
 
 ## Out of Scope
 
-- File downloads (handled by DDB stream Lambda)
-- ChannelIndex management (handled by DDB stream Lambda)
-- Channel type filtering (store all events, even private channels if bot is added)
-- User entity storage (denormalize user info in messages only)
-- Backfill of historical messages
+- File downloads (handled by DDB stream Lambda) ✅ File processor implemented
+- ChannelIndex management (handled by DDB stream Lambda) ✅ File processor implemented
+- Channel type filtering (store all events, even private channels if bot is added) ✅ Stores all events regardless of visibility
+- User entity storage (denormalize user info in messages only) ✅ Users stored in messages
+- Backfill of historical messages (only real-time events captured)
 - Rate limiting (rely on Slack's event delivery rate)
 
 ---

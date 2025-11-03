@@ -8,10 +8,10 @@ import {
   dynamoGetById,
   dynamoDeleteItem,
   createDynamoClient,
-} from '../dynamodb-utils';
-import * as cache from '../cache';
+} from '../../utils/dynamodb-utils';
+import * as cache from '../../utils/cache';
 
-jest.mock('../cache');
+jest.mock('../../utils/cache');
 jest.mock('@aws-sdk/client-dynamodb');
 jest.mock('@aws-sdk/lib-dynamodb', () => ({
   GetCommand: jest.fn(),

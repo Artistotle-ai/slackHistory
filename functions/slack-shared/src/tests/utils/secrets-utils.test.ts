@@ -1,8 +1,8 @@
-import { getSecretsClient, getSecretValue } from '../secrets-utils';
-import * as cache from '../cache';
+import { getSecretsClient, getSecretValue } from '../../utils/secrets-utils';
+import * as cache from '../../utils/cache';
 import { SECRET_CACHE_PREFIX, SECRET_CACHE_TTL } from '../../config/settings';
 
-jest.mock('../cache');
+jest.mock('../../utils/cache');
 
 describe('secrets-utils', () => {
   const mockGetFromCache = cache.getFromCache as jest.Mock;

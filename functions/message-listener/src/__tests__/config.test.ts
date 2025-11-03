@@ -67,6 +67,23 @@ describe('config', () => {
       expect(shared.hasInCache).toHaveBeenCalledWith('config#loadConfig');
     });
 
+    it('should load config from env when cache check returns true but cached value is null', async () => {
+      process.env.SLACK_ARCHIVE_TABLE = 'test-table';
+      process.env.SLACK_SIGNING_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test';
+      process.env.AWS_REGION = 'us-east-1';
+
+      // hasInCache returns true, but getFromCache returns null (cache miss or expired)
+      (shared.hasInCache as jest.Mock).mockResolvedValue(true);
+      (shared.getFromCache as jest.Mock).mockResolvedValue(null);
+
+      const config = await loadConfig();
+
+      expect(config.tableName).toBe('test-table');
+      expect(shared.hasInCache).toHaveBeenCalledWith('config#loadConfig');
+      expect(shared.getFromCache).toHaveBeenCalledWith('config#loadConfig');
+      // Should load from env instead of using null cache value
+    });
+
     it('should throw error if SLACK_ARCHIVE_TABLE is missing', async () => {
       process.env.SLACK_SIGNING_SECRET_ARN = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test';
 

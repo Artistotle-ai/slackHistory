@@ -13,15 +13,22 @@ AWS serverless architecture for Slack message archival.
 
 **Resources:**
 - S3 bucket: `mnemosyne-artifacts-{account}-{region}`
-- Secrets: `Mnemosyne/slack/signing-secret`, `Mnemosyne/slack/client-id`, `Mnemosyne/slack/client-secret`
+  - Lifecycle: Delete artifacts after 7 days
+  - Versioning: Disabled
+  - Encryption: S3-managed
+- Secrets Manager: `Mnemosyne/slack/signing-secret`, `Mnemosyne/slack/client-id`, `Mnemosyne/slack/client-secret`
 - CodeStar GitHub connection: `Mnemosyne-github`
-- IAM role: `MnemosyneCiRole` (CodePipeline permissions)
+  - Provider: GitHub
+  - Status: PENDING (requires manual authorization in AWS Console)
 
 **Exports:**
 - `MnemosyneSlackSigningSecretArn`
 - `MnemosyneSlackClientIdSecretArn`
 - `MnemosyneSlackClientSecretArn`
 - `MnemosyneGitHubConnectionArn`
+- `MnemosyneCdkFilePublishingRoleArn`
+- `MnemosyneCdkDeployRoleArn`
+- `MnemosyneCdkLookupRoleArn`
 
 ## MainInfraStack
 
@@ -29,18 +36,13 @@ AWS serverless architecture for Slack message archival.
 - Partition key: `itemId` (string)
 - Sort key: `timestamp` (string)
 - Billing: PAY_PER_REQUEST
-- GSI: `ThreadIndex` (partition: `parent`, sort: `timestamp`)
-- Stream: Not enabled (file-processor not implemented)
+- GSI: `ThreadIndex` (partition: `parent`, sort: `timestamp`) - Sparse index for thread replies
+- Stream: NEW_AND_OLD_IMAGES (enabled for file-processor and ChannelIndex updates)
 
 **S3 Bucket:** `mnemosyne-slack-files-{account}-{region}`
 - Versioning: Suspended
 - Lifecycle: Transition to IA after 90 days
 - Encryption: S3-managed
-
-**Lambda Layer:** `MnemosyneSlackSharedLayer`
-- Contains shared `slack-shared` code and dependencies
-- Attached to all Lambda functions to reduce bundle sizes
-- See [Lambda Layer Documentation](lambda-layer.md) for details
 
 **Lambda Functions:**
 
@@ -49,13 +51,24 @@ See [Lambda Functions](../lambda-functions/) documentation:
 - [OAuth Callback](../lambda-functions/oauth-callback.md) - `MnemosyneOAuthCallback`
 - [File Processor](../lambda-functions/file-processor.md) - `MnemosyneFileProcessor`
 
-All Lambda functions use the shared layer for `slack-shared` code.
+**Lambda Specifications:**
+- Runtime: Node.js 20, ARM64
+- Memory: 512 MB (all functions)
+- Message Listener: 30s timeout, Dead Letter Queue (14-day retention)
+- OAuth Callback: 10s timeout
+- File Processor: 5min timeout, Reserved Concurrency: 1 (for ChannelIndex serialization), Max Event Age: 6 minutes, Retry Attempts: 2
 
-**IAM Role:** `MnemosyneLambdaExecutionRole`
-- DynamoDB: Read/write on `MnemosyneSlackArchive`
-- S3: Read/write on `mnemosyne-slack-files-*`
-- Secrets Manager: `GetSecretValue` on `Mnemosyne/slack/*`
-- CloudWatch Logs: Write permissions
+**IAM Roles:**
+- `MnemosyneLambdaExecutionRole` (message-listener, file-processor)
+  - DynamoDB: Read/write on `MnemosyneSlackArchive`
+  - S3: Read/write on `mnemosyne-slack-files-*`
+  - Secrets Manager: `GetSecretValue` on `Mnemosyne/slack/*`
+  - CloudWatch Logs: Write permissions
+- `MnemosyneOAuthLambdaExecutionRole` (oauth-callback)
+  - DynamoDB: Write on `MnemosyneSlackArchive`
+  - Secrets Manager: `GetSecretValue` on `Mnemosyne/slack/*`
+  - Lambda: `GetFunctionUrlConfig` on own function
+  - CloudWatch Logs: Write permissions
 
 ## Pipeline Stacks
 
@@ -66,17 +79,19 @@ All pipelines:
 - Deployment: Lambda update-function-code
 
 **PipelineInfraStack**
-- Triggers: Changes to `infrastructure/`
+- Triggers: Changes to `infrastructure/` folder in main branch
 - Buildspec: `infrastructure/buildspecs/infrastructure-buildspec.yml`
-- Deploys: All CDK stacks
+- CodeBuild: Linux Standard 7.0 (x86_64), Medium compute
+- Deploys: All CDK stacks sequentially
 
 **PipelineLambdasStack**
-- Triggers: Changes to `functions/` folder
+- Triggers: Changes to `functions/` folder in main branch
 - Buildspec: `infrastructure/buildspecs/lambdas-buildspec.yml`
+- CodeBuild: Amazon Linux 2023 Standard 3.0 (ARM64), Medium compute
 - Deploys: All Lambda functions sequentially
-  - Builds `slack-shared` as Lambda Layer first
-  - Then builds and deploys: `MnemosyneMessageListener`, `MnemosyneFileProcessor`, `MnemosyneOAuthCallback`
-  - All functions use the shared Lambda Layer
+  - Builds all functions with dependencies included
+  - Deploys: `MnemosyneMessageListener`, `MnemosyneFileProcessor`, `MnemosyneOAuthCallback`
+  - Uses `update-function-code` to deploy function bundles
 
 ## Event Flow
 
@@ -92,9 +107,9 @@ Slack Events API
 MnemosyneMessageListener (Function URL)
     ↓ verify signature → write event
 DynamoDB (MnemosyneSlackArchive)
-    ↓ stream (not configured)
-MnemosyneFileProcessor (not implemented)
-    ↓ download files
+    ↓ DynamoDB Stream (NEW_AND_OLD_IMAGES)
+MnemosyneFileProcessor (Reserved Concurrency: 1)
+    ↓ download files / maintain ChannelIndex
 S3 (mnemosyne-slack-files-*)
 ```
 
@@ -108,7 +123,7 @@ S3 (mnemosyne-slack-files-*)
 
 ## Region
 
-Hardcoded: `eu-west-1`
+Default: `eu-west-1` (configurable via `AWS_REGION` environment variable)
 
 All resources deployed to single region.
 

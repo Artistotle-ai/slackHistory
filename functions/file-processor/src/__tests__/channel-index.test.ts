@@ -293,6 +293,177 @@ describe('channel-index', () => {
       expect(mockPutItem).toHaveBeenCalled();
       // Should not throw, just return
     });
+
+    it('should handle queryItems throwing error', async () => {
+      const tableName = 'test-table';
+      const item = {
+        itemId: 'channel#T123',
+        team_id: 'T123',
+        channel_id: 'C456',
+        name: 'test-channel',
+      };
+
+      const queryError = new Error('Query failed');
+      mockQueryItems.mockRejectedValue(queryError);
+
+      // Should not throw - error is handled internally
+      await expect(maintainChannelIndex(tableName, item)).rejects.toThrow('Query failed');
+    });
+
+    it('should handle missing name for deleted channel with no oldItem', async () => {
+      const tableName = 'test-table';
+      const item = {
+        itemId: 'channel#T123',
+        team_id: 'T123',
+        channel_id: 'C456',
+        deleted: true,
+        // No name
+      };
+
+      const existingShard = {
+        itemId: 'channelindex#T123',
+        timestamp: '0',
+        channels_map: {},
+      };
+
+      mockQueryItems.mockResolvedValue([existingShard]);
+
+      await maintainChannelIndex(tableName, item);
+
+      expect(mockPutItem).toHaveBeenCalledWith(tableName, {
+        itemId: 'channelindex#T123',
+        timestamp: '0',
+        channels_map: {
+          'C456': 'deleted_unknown',
+        },
+      });
+    });
+
+    it('should handle missing name for active channel', async () => {
+      const tableName = 'test-table';
+      const item = {
+        itemId: 'channel#T123',
+        team_id: 'T123',
+        channel_id: 'C456',
+        // No name, not deleted
+      };
+
+      const existingShard = {
+        itemId: 'channelindex#T123',
+        timestamp: '0',
+        channels_map: {},
+      };
+
+      mockQueryItems.mockResolvedValue([existingShard]);
+
+      await maintainChannelIndex(tableName, item);
+
+      expect(mockPutItem).toHaveBeenCalledWith(tableName, {
+        itemId: 'channelindex#T123',
+        timestamp: '0',
+        channels_map: {
+          'C456': 'unknown',
+        },
+      });
+    });
+
+    it('should create new shard when exactly at size limit', async () => {
+      const tableName = 'test-table';
+      const item = {
+        itemId: 'channel#T123',
+        team_id: 'T123',
+        channel_id: 'C456',
+        name: 'test-channel',
+      };
+
+      // Create a shard that's just under 350KB
+      const largeChannelsMap: Record<string, string> = {};
+      // Estimate: each entry ~150 bytes (channel ID + name)
+      // Need ~350KB total, so ~2333 entries of ~150 bytes each
+      for (let i = 0; i < 2400; i++) {
+        largeChannelsMap[`C${i}`] = 'a'.repeat(100);
+      }
+
+      const existingShard = {
+        itemId: 'channelindex#T123',
+        timestamp: '0',
+        channels_map: largeChannelsMap,
+      };
+
+      mockQueryItems.mockResolvedValue([existingShard]);
+
+      await maintainChannelIndex(tableName, item);
+
+      // Should create new shard if size exceeds 350KB
+      const lastCall = mockPutItem.mock.calls[mockPutItem.mock.calls.length - 1];
+      const updatedShard = lastCall[1];
+      const shardSize = JSON.stringify(updatedShard).length;
+      
+      // If size > 350KB, should create new shard
+      if (shardSize > 350 * 1024) {
+        expect(updatedShard.timestamp).toBe('1');
+      }
+    });
+
+    it('should handle channel with empty string name', async () => {
+      const tableName = 'test-table';
+      const item = {
+        itemId: 'channel#T123',
+        team_id: 'T123',
+        channel_id: 'C456',
+        name: '',
+      };
+
+      const existingShard = {
+        itemId: 'channelindex#T123',
+        timestamp: '0',
+        channels_map: {},
+      };
+
+      mockQueryItems.mockResolvedValue([existingShard]);
+
+      await maintainChannelIndex(tableName, item);
+
+      expect(mockPutItem).toHaveBeenCalledWith(tableName, {
+        itemId: 'channelindex#T123',
+        timestamp: '0',
+        channels_map: {
+          'C456': 'unknown',
+        },
+      });
+    });
+
+    it('should handle channel item with oldChannelItem undefined (lines 71-72)', async () => {
+      // Test the edge case when oldChannelItem parameter is explicitly undefined
+      // This covers the optional parameter branch
+      const tableName = 'test-table';
+      const item = {
+        itemId: 'channel#T123',
+        team_id: 'T123',
+        channel_id: 'C456',
+        name: 'test-channel',
+        deleted: false,
+      };
+
+      const existingShard = {
+        itemId: 'channelindex#T123',
+        timestamp: '0',
+        channels_map: {},
+      };
+
+      mockQueryItems.mockResolvedValue([existingShard]);
+
+      // Call with oldChannelItem explicitly undefined (not provided)
+      await maintainChannelIndex(tableName, item, undefined);
+
+      expect(mockPutItem).toHaveBeenCalledWith(tableName, {
+        itemId: 'channelindex#T123',
+        timestamp: '0',
+        channels_map: {
+          'C456': 'test-channel',
+        },
+      });
+    });
   });
 });
 

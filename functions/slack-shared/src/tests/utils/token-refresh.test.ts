@@ -7,17 +7,17 @@ import {
   getFromCacheOrDbWithValidation,
   getTokenItemFromDbIfNotExpired,
   deleteToken,
-} from '../token-refresh';
-import * as dynamodbUtils from '../dynamodb-utils';
-import * as cache from '../cache';
-import * as utils from '../utils';
+} from '../../utils/token-refresh';
+import * as dynamodbUtils from '../../utils/dynamodb-utils';
+import * as cache from '../../utils/cache';
+import * as utils from '../../utils/utils';
 import { OAuthTokenItem, RefreshTokenResponse } from '../../config/types';
 import { TOKEN_CACHE_PREFIX, REFRESH_CACHE_PREFIX, TOKEN_DEFAULT_TTL, TOKEN_REFRESH_BUFFER } from '../../config/settings';
 
-jest.mock('../dynamodb-utils');
-jest.mock('../cache');
-jest.mock('../utils');
-jest.mock('../logger', () => ({
+jest.mock('../../utils/dynamodb-utils');
+jest.mock('../../utils/cache');
+jest.mock('../../utils/utils');
+jest.mock('../../utils/logger', () => ({
   logger: {
     debug: jest.fn(),
     error: jest.fn(),
