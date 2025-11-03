@@ -20,6 +20,7 @@
       "bot": [
         "channels:history",
         "channels:read",
+        "channels:join",
         "files:read",
         "groups:history",
         "groups:read",

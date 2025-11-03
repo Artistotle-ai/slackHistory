@@ -14,6 +14,7 @@ import {
   createErrorResponse,
   getRedirectUri,
 } from "./request-utils";
+import { joinAllPublicChannels } from "./slack-api";
 
 // Load config at module initialization
 let config: ReturnType<typeof loadConfig>;
@@ -111,6 +112,15 @@ export const handler = async (
     logger.info(
       `Successfully stored OAuth tokens for team: ${tokenItem.team_id}`
     );
+
+    // Auto-join all public channels (non-blocking - don't fail OAuth if this fails)
+    try {
+      await joinAllPublicChannels(tokenItem.bot_token);
+      logger.info(`Successfully joined all public channels for team: ${tokenItem.team_id}`);
+    } catch (error) {
+      // Log error but don't fail the OAuth flow
+      logger.error("Failed to auto-join channels (non-critical)", error);
+    }
 
     // Return success response
     return createSuccessResponse();

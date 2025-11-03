@@ -211,8 +211,10 @@ export class MainInfraStack extends cdk.Stack {
       deadLetterQueue: messageListenerDlq, // DLQ for DynamoDB write errors
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
-        // Import secret ARN from BaseRolesStack exports (deployed first)
+        // Import secret ARNs from BaseRolesStack exports (deployed first)
         SLACK_SIGNING_SECRET_ARN: cdk.Fn.importValue(`${appPrefix}SlackSigningSecretArn`),
+        SLACK_CLIENT_ID_ARN: cdk.Fn.importValue(`${appPrefix}SlackClientIdSecretArn`),
+        SLACK_CLIENT_SECRET_ARN: cdk.Fn.importValue(`${appPrefix}SlackClientSecretArn`),
         // AWS_REGION is automatically provided by Lambda runtime - do not set manually
       },
       description: 'Deployed via CodePipeline only - do not update manually',

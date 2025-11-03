@@ -58,6 +58,7 @@ export async function handleChannelCreated(
   const itemId = getChannelItemId(teamId, channelId);
   const timestamp = event.event_ts || String(Date.now() / 1000);
   const name = event.channel.name;
+  const isPublic = !event.channel.is_private;
 
   await putItem(tableName, {
     itemId,
@@ -67,11 +68,63 @@ export async function handleChannelCreated(
     channel_id: channelId,
     name,
     names_history: [name],
-    visibility: event.channel.is_private ? "private" : "public",
+    visibility: isPublic ? "public" : "private",
     raw_event: event as unknown as SlackEvent,
   });
 
   logger.info(`Created channel: ${itemId}, name: ${name}`);
+
+  // Auto-join public channels (non-blocking - don't fail if this fails)
+  if (isPublic) {
+    try {
+      const { getValidBotToken, getSecretValue } = await import("mnemosyne-slack-shared");
+      const clientIdArn = process.env.SLACK_CLIENT_ID_ARN!;
+      const clientSecretArn = process.env.SLACK_CLIENT_SECRET_ARN!;
+      const region = process.env.AWS_REGION || "eu-west-1";
+
+      // Get client credentials from Secrets Manager
+      const [clientId, clientSecret] = await Promise.all([
+        getSecretValue(clientIdArn, region),
+        getSecretValue(clientSecretArn, region),
+      ]);
+
+      if (!clientId || !clientSecret) {
+        throw new Error("Failed to retrieve OAuth credentials");
+      }
+
+      const botToken = await getValidBotToken(tableName, teamId, clientId, clientSecret);
+      await joinChannel(botToken, channelId);
+      logger.info(`Auto-joined new public channel: ${name} (${channelId})`);
+    } catch (error) {
+      logger.warn(`Failed to auto-join channel ${name} (non-critical):`, error);
+    }
+  }
+}
+
+/**
+ * Join a specific channel using Slack API
+ */
+async function joinChannel(botToken: string, channelId: string): Promise<void> {
+  const response = await fetch("https://slack.com/api/conversations.join", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${botToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      channel: channelId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Slack API returned status ${response.status}`);
+  }
+
+  const data = await response.json() as { ok: boolean; error?: string };
+
+  if (!data.ok) {
+    throw new Error(`Slack API error: ${data.error || "Unknown error"}`);
+  }
 }
 
 /**
