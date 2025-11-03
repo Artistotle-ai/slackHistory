@@ -26,15 +26,15 @@ module.exports = {
   ],
   coverageDirectory: '<rootDir>/coverage',
   coverageReporters: ['text', 'text-summary', 'html', 'lcov'],
-  // Coverage thresholds (can be adjusted as coverage improves)
-  // coverageThreshold: {
-  //   global: {
-  //     branches: 70,
-  //     functions: 70,
-  //     lines: 70,
-  //     statements: 70,
-  //   },
-  // },
+  // Coverage thresholds - 90% target
+  coverageThreshold: {
+    global: {
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90,
+    },
+  },
   // Setup for handling module paths correctly
   moduleDirectories: ['node_modules', '<rootDir>'],
   // Prevent duplicate runs if running from individual function directories

@@ -4,7 +4,8 @@
     // Use node20 module mode for stable Node.js 20+ behavior
     // This provides consistent, predictable interop between CommonJS and ESM modules
     "module": "node20",
-    "moduleResolution": "nodenext"
+    "moduleResolution": "nodenext",
+    "types": ["jest", "node"],
   }
 }
 

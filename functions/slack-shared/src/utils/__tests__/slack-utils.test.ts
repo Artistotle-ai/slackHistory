@@ -1,4 +1,4 @@
-import { verifySlackSignature, whitelistFileMetadata } from '../slack-utils';
+import { verifySlackSignature, whitelistFileMetadata, getMessageChannelId } from '../slack-utils';
 import { SlackFile, SlackFileMetadata } from '../../config/types';
 
 describe('slack-utils', () => {
@@ -116,6 +116,32 @@ describe('slack-utils', () => {
       expect(result).toEqual({
         id: 'F123456',
       });
+    });
+  });
+
+  describe('getMessageChannelId', () => {
+    it('should return channel from channel property', () => {
+      const event = { channel: 'C123456' };
+      const result = getMessageChannelId(event);
+      expect(result).toBe('C123456');
+    });
+
+    it('should return channel from channel_id property', () => {
+      const event = { channel_id: 'C123456' };
+      const result = getMessageChannelId(event);
+      expect(result).toBe('C123456');
+    });
+
+    it('should prefer channel over channel_id', () => {
+      const event = { channel: 'C111111', channel_id: 'C222222' };
+      const result = getMessageChannelId(event);
+      expect(result).toBe('C111111');
+    });
+
+    it('should return undefined if neither channel nor channel_id is present', () => {
+      const event = {};
+      const result = getMessageChannelId(event);
+      expect(result).toBeUndefined();
     });
   });
 });

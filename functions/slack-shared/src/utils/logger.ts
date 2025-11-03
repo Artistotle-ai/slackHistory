@@ -58,6 +58,16 @@ function initLogger(): LoggerConfig {
 }
 
 /**
+ * Get current logger config, reinitializing if needed
+ */
+function getLoggerConfig(): LoggerConfig {
+  if (!loggerConfig) {
+    return initLogger();
+  }
+  return loggerConfig;
+}
+
+/**
  * Format log message with optional error
  */
 function formatLogMessage(level: string, message: string, error?: unknown): string {
@@ -90,10 +100,15 @@ function formatLogMessage(level: string, message: string, error?: unknown): stri
  * - DEBUG: All messages
  */
 class Logger {
-  private config: LoggerConfig;
-
   constructor() {
-    this.config = initLogger();
+    // Initialize on first access
+  }
+
+  /**
+   * Get current config (reinitializes if reset)
+   */
+  private getConfig(): LoggerConfig {
+    return getLoggerConfig();
   }
 
   /**
@@ -107,7 +122,7 @@ class Logger {
    * Log warning message (logged if level >= WARN)
    */
   warn(message: string, error?: unknown): void {
-    if (this.config.level >= LogLevel.WARN) {
+    if (this.getConfig().level >= LogLevel.WARN) {
       console.warn(formatLogMessage('WARN', message, error));
     }
   }
@@ -116,7 +131,7 @@ class Logger {
    * Log info message (logged if level >= INFO)
    */
   info(message: string): void {
-    if (this.config.level >= LogLevel.INFO) {
+    if (this.getConfig().level >= LogLevel.INFO) {
       console.log(formatLogMessage('INFO', message));
     }
   }
@@ -125,7 +140,7 @@ class Logger {
    * Log debug message (logged if level >= DEBUG)
    */
   debug(message: string): void {
-    if (this.config.level >= LogLevel.DEBUG) {
+    if (this.getConfig().level >= LogLevel.DEBUG) {
       console.log(formatLogMessage('DEBUG', message));
     }
   }
@@ -134,7 +149,7 @@ class Logger {
    * Get current log level (for testing/debugging)
    */
   getLevel(): LogLevel {
-    return this.config.level;
+    return this.getConfig().level;
   }
 
   /**
