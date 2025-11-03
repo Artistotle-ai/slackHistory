@@ -5,7 +5,8 @@
     "infra": "bin/infra.js"
   },
   "scripts": {
-    "build": "tsc",
+    "clean": "find . -name '*.js' -o -name '*.d.ts' | grep -v node_modules | grep -v cdk.out | xargs rm -f 2>/dev/null || true",
+    "build": "npm run clean && tsc",
     "watch": "tsc -w",
     "cdk": "cdk"
   },
