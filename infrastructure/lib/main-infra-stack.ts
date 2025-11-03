@@ -179,30 +179,6 @@ export class MainInfraStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Lambda Layer for shared slack-shared code
-    // Layer will be published by pipeline, but we create the layer resource here
-    // so it can be referenced and attached to Lambda functions
-    // Pipeline will publish new versions, but the layer name stays the same
-    // Use placeholder directory structure (pipeline will publish actual versions)
-    const slackSharedLayer = new lambda.LayerVersion(this, 'SlackSharedLayer', {
-      layerVersionName: `${appPrefix}SlackSharedLayer`,
-      code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 503, body: "Lambda not deployed via pipeline" });'),
-      compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
-      compatibleArchitectures: [lambda.Architecture.ARM_64],
-      description: 'Shared utilities and types for Mnemosyne Slack functions - managed by pipeline',
-      // Note: This is a placeholder layer version. The pipeline will publish actual versions.
-      // The layer name will be used by the pipeline to publish new versions.
-    });
-
-    // Export layer ARN for pipeline reference (optional - pipeline can look up by name)
-    // For now, pipeline will look up the layer by name, but we export the name for documentation
-    const layerName = `${appPrefix}SlackSharedLayer`;
-    new cdk.CfnOutput(this, 'SlackSharedLayerName', {
-      value: layerName,
-      description: 'Lambda Layer name for slack-shared (versions published by pipeline)',
-      exportName: `${appPrefix}SlackSharedLayerName`,
-    });
-
     // Dead Letter Queue for message-listener Lambda (DynamoDB write errors)
     const messageListenerDlq = new sqs.Queue(this, 'MessageListenerDLQ', {
       queueName: `${appPrefix}MessageListenerDLQ`,
@@ -223,7 +199,6 @@ export class MainInfraStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       memorySize: 512, // Increased memory for faster CPU and better cold start performance
       deadLetterQueue: messageListenerDlq, // DLQ for DynamoDB write errors
-      layers: [slackSharedLayer], // Attach shared layer - pipeline will update to latest version
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
         // Import secret ARN from BaseRolesStack exports (deployed first)
@@ -258,7 +233,6 @@ export class MainInfraStack extends cdk.Stack {
       memorySize: 512,
       maxEventAge: cdk.Duration.minutes(6), // Max age of event before discarding
       retryAttempts: 2, // Retry failed invocations
-      layers: [slackSharedLayer], // Attach shared layer - pipeline will update to latest version
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
         SLACK_FILES_BUCKET: this.slackFilesBucket.bucketName,
@@ -292,7 +266,6 @@ export class MainInfraStack extends cdk.Stack {
       role: oauthLambdaRole,
       timeout: cdk.Duration.seconds(10),
       memorySize: 512, // Increased memory for faster CPU and better cold start performance
-      layers: [slackSharedLayer], // Attach shared layer - pipeline will update to latest version
       environment: {
         SLACK_ARCHIVE_TABLE: this.slackArchiveTable.tableName,
         SLACK_CLIENT_ID_ARN: cdk.Fn.importValue(`${appPrefix}SlackClientIdSecretArn`),

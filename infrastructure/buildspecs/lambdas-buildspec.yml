@@ -5,59 +5,68 @@ phases:
     runtime-versions:
       nodejs: 20
     commands:
+      - echo " Installing Node.js 20 "
       - n 20
       - node --version
       - npm --version
-      - npm install
-
   pre_build:
     commands:
-      - echo "=== Checking for lambda changes ==="
-      - BUILD_TYPE=lambdas node infrastructure/scripts/check-changes.js
-      - |
-        ENV_FILE="${CODEBUILD_SRC_DIR:-.}/build-changes.env"
-        if [ -f "${ENV_FILE}" ]; then
-          set -a  # automatically export all variables
-          source "${ENV_FILE}" || . "${ENV_FILE}"
-          set +a
-          echo "Loaded HAS_CHANGES=${HAS_CHANGES} from ${ENV_FILE}"
-        else
-          echo "WARNING: ${ENV_FILE} not found, defaulting to HAS_CHANGES=true"
-          export HAS_CHANGES=true
-        fi
-      - echo "HAS_CHANGES=${HAS_CHANGES}"
-      - |
-        if [ "${HAS_CHANGES}" = "false" ]; then
-          echo "No changes detected - skipping lambda builds"
-          exit 0
-        else
-          echo "Changes detected - proceeding with build"
-          node infrastructure/scripts/setup-lambdas-env.js
-          export LAYER_ARN="${LAYER_ARN}"
-        fi
+      - echo " Installing all dependencies "
+      - cd functions && npm run install:all
+      - echo " Building all Lambda functions "
+      - npm run build:all && cd ..
+      - echo "✓ All functions built successfully"
 
   build:
     commands:
+      - echo " Packaging and deploying Lambda functions "
       - |
-        ENV_FILE="${CODEBUILD_SRC_DIR:-.}/build-changes.env"
-        if [ -f "${ENV_FILE}" ]; then
-          set -a
-          source "${ENV_FILE}" || . "${ENV_FILE}"
-          set +a
-        fi
+        export APP_PREFIX="${APP_PREFIX:-Mnemosyne}"
+        
+        # Function: message-listener
+        echo "Packaging message-listener..."
+        cd functions/message-listener
+        npm prune --production
+        zip -rq ../../message-listener-function.zip dist node_modules
+        cd ../..
+        aws lambda update-function-code \
+          --function-name "${APP_PREFIX}MessageListener" \
+          --zip-file fileb://message-listener-function.zip
+        echo "✓ message-listener deployed"
       - |
-        if [ "${HAS_CHANGES:-true}" = "false" ]; then
-          echo "Skipping build phase - no changes"
-          exit 0
-        fi
-      - npm run build:lambdas
-      - npm run deploy:lambdas
+        export APP_PREFIX="${APP_PREFIX:-Mnemosyne}"
+        
+        # Function: file-processor
+        echo "Packaging file-processor..."
+        cd functions/file-processor
+        npm prune --production
+        zip -rq ../../file-processor-function.zip dist node_modules
+        cd ../..
+        aws lambda update-function-code \
+          --function-name "${APP_PREFIX}FileProcessor" \
+          --zip-file fileb://file-processor-function.zip
+        echo "✓ file-processor deployed"
+      - |
+        export APP_PREFIX="${APP_PREFIX:-Mnemosyne}"
+        
+        # Function: oauth-callback
+        echo "Packaging oauth-callback..."
+        cd functions/oauth-callback
+        npm prune --production
+        zip -rq ../../oauth-callback-function.zip dist node_modules
+        cd ../..
+        aws lambda update-function-code \
+          --function-name "${APP_PREFIX}OAuthCallback" \
+          --zip-file fileb://oauth-callback-function.zip
+        echo "✓ oauth-callback deployed"
+      - echo " All Lambda functions built and deployed successfully "
 
 cache:
-  key: lambdas-$(codebuild-hash-files package-lock.json package.json functions/message-listener/package.json functions/file-processor/package.json functions/oauth-callback/package.json)
+  key: lambdas-$(codebuild-hash-files package-lock.json package.json functions/*/package.json functions/slack-shared/package.json)
   paths:
     - 'node_modules/**/*'
     - 'functions/*/node_modules/**/*'
+    - 'functions/slack-shared/node_modules/**/*'
 
 artifacts:
   files:

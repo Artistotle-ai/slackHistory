@@ -14,8 +14,6 @@
     "watch:listener": "cd message-listener && npm run watch",
     "watch:callback": "cd oauth-callback && npm run watch",
     "watch:processor": "cd file-processor && npm run watch",
-    "watch:all": "concurrently -n shared,listener,callback,processor 'npm run watch:shared' 'npm run watch:listener' 'npm run watch:callback' 'npm run watch:processor'",
-    "test:all": "cd slack-shared && npm test && cd ../message-listener && npm test && cd ../oauth-callback && npm test && cd ../file-processor && npm test",
     "clean": "find . -name 'dist' -type d ! -path '*/node_modules/*' -exec rm -rf {} + 2>/dev/null || true"
   },
   "workspaces": [
@@ -24,10 +22,6 @@
     "oauth-callback",
     "file-processor"
   ],
-  "devDependencies": {
-    "concurrently": "^8.2.2"
-  },
-  "dependencies": {
-    "@babel/core": "^7.28.5"
-  }
+  "devDependencies": {},
+  "dependencies": {}
 }

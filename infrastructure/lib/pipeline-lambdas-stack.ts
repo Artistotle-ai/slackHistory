@@ -51,13 +51,12 @@ export class PipelineLambdasStack extends cdk.Stack {
     // Grant S3 permissions
     artifactBucket.grantReadWrite(codeBuildRole);
 
-    // Add Lambda update permissions to CodeBuild role for all Lambda functions and layer
+    // Add Lambda update permissions to CodeBuild role for all Lambda functions
     const lambdaFunctions = [
       `${appPrefix}MessageListener`,
       `${appPrefix}FileProcessor`,
       `${appPrefix}OAuthCallback`,
     ];
-    const layerName = `${appPrefix}SlackSharedLayer`;
 
     codeBuildRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
@@ -65,17 +64,11 @@ export class PipelineLambdasStack extends cdk.Stack {
         'lambda:UpdateFunctionCode',
         'lambda:GetFunction',
         'lambda:UpdateFunctionConfiguration',
-        'lambda:PublishLayerVersion',
-        'lambda:GetLayerVersion',
-        'lambda:ListLayerVersions',
-        'lambda:DeleteLayerVersion', // For cleanup of old layer versions
       ],
       resources: [
         ...lambdaFunctions.map(name => 
           `arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:${name}`
         ),
-        // Layer ARN pattern - allow publishing, listing, and deleting versions
-        `arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:layer:${layerName}:*`,
       ],
     }));
 
@@ -106,58 +99,24 @@ export class PipelineLambdasStack extends cdk.Stack {
       ],
     }));
 
-    // Build projects - Layer build only (Infrastructure is deployed via separate Infrastructure pipeline)
-    // 1. Layer build project
+    // Single CodeBuild project that builds and deploys all Lambda functions
     // Note: No source property - source comes from CodePipeline Action
-    const layerBuildProject = new codebuild.PipelineProject(this, 'LayerBuildProject', {
-      projectName: `${appPrefix}LayerBuild`,
+    const lambdasBuildProject = new codebuild.PipelineProject(this, 'LambdasBuildDeployProject', {
+      projectName: `${appPrefix}LambdasBuildDeploy`,
       environment: {
         buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
         computeType: codebuild.ComputeType.MEDIUM,
         privileged: false,
       },
       cache: codebuild.Cache.bucket(artifactBucket, {
-        prefix: 'codebuild-cache-layer-build',
-      }),
-      buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/layer-buildspec.yml'),
-      role: codeBuildRole,
-      logging: {
-        cloudWatch: {
-          logGroup: new logs.LogGroup(this, 'LayerBuildLogs', {
-            logGroupName: `/aws/codebuild/${appPrefix}LayerBuild`,
-            retention: logs.RetentionDays.ONE_WEEK,
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
-          }),
-        },
-      },
-      environmentVariables: {
-        ARTIFACT_BUCKET: {
-          value: artifactBucket.bucketName,
-        },
-        APP_PREFIX: {
-          value: appPrefix,
-        },
-      },
-    });
-
-    // 2. Lambdas build project (builds all 3 functions)
-    // Note: No source property - source comes from CodePipeline Action
-    const lambdasBuildProject = new codebuild.PipelineProject(this, 'LambdasBuildProject', {
-      projectName: `${appPrefix}LambdasBuild`,
-      environment: {
-        buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
-        computeType: codebuild.ComputeType.MEDIUM,
-        privileged: false,
-      },
-      cache: codebuild.Cache.bucket(artifactBucket, {
-        prefix: 'codebuild-cache-lambdas-build',
+        prefix: 'codebuild-cache-lambdas',
       }),
       buildSpec: codebuild.BuildSpec.fromSourceFilename('infrastructure/buildspecs/lambdas-buildspec.yml'),
       role: codeBuildRole,
       logging: {
         cloudWatch: {
           logGroup: new logs.LogGroup(this, 'LambdasBuildLogs', {
-            logGroupName: `/aws/codebuild/${appPrefix}LambdasBuild`,
+            logGroupName: `/aws/codebuild/${appPrefix}LambdasBuildDeploy`,
             retention: logs.RetentionDays.ONE_WEEK,
             removalPolicy: cdk.RemovalPolicy.DESTROY,
           }),
@@ -172,8 +131,6 @@ export class PipelineLambdasStack extends cdk.Stack {
         },
       },
     });
-
-    // No separate deploy projects needed - deployments happen in the build step
 
     // CodePipeline for all Lambda deployments
     const pipeline = new codepipeline.Pipeline(this, 'LambdasPipeline', {
@@ -199,33 +156,15 @@ export class PipelineLambdasStack extends cdk.Stack {
       actions: [sourceAction],
     });
 
-    // Build stage 1 - Layer build+deploy
-    // Layer build deploys the layer (outputs node_modules zip + layer ARN)
-    const layerBuildOutput = new codepipeline.Artifact('LayerBuildArtifact');
-    const layerBuildAction = new codepipeline_actions.CodeBuildAction({
-      actionName: 'Layer_Build_Deploy',
-      project: layerBuildProject,
-      input: sourceOutput, // Use source artifact as input
-      outputs: [layerBuildOutput],
-    });
-
-    pipeline.addStage({
-      stageName: 'Build_Layer',
-      actions: [layerBuildAction],
-    });
-
-    // Build and Deploy stage - Lambdas build and deploy in same CodeBuild (just API calls)
-    const lambdasBuildOutput = new codepipeline.Artifact('LambdasBuildArtifacts');
+    // Build and Deploy stage - Single CodeBuild that builds and deploys all lambdas
     const lambdasBuildAction = new codepipeline_actions.CodeBuildAction({
       actionName: 'Lambdas_Build_Deploy',
       project: lambdasBuildProject,
-      input: sourceOutput, // Primary input (source code)
-      extraInputs: [layerBuildOutput], // Carry over merged node_modules zip and layer-arn.env
-      outputs: [lambdasBuildOutput],
+      input: sourceOutput, // Source code input
     });
 
     pipeline.addStage({
-      stageName: 'Build_Deploy_Lambdas',
+      stageName: 'Build_Deploy',
       actions: [lambdasBuildAction],
     });
 

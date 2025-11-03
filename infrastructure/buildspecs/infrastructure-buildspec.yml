@@ -4,14 +4,10 @@ phases:
     runtime-versions:
       nodejs: 20
     commands:
-      - cd infrastructure
-      - rm -rf node_modules
-      - rm  package-lock.json
-      - rm -rf *.js *.d.ts *.map
-      - npm install -g aws-cdk
+      - cd infrastructure && 
+      - npm ci
+      - npm install 
+      - npm run build
   build:
     commands:
-      - npm install
-      - npm run build
-      - npx cdk synth --verbose
-      - npx cdk deploy --all --require-approval never --outputs-file outputs.json --verbose
+      - npx cdk deploy --all --require-approval never  --region eu-west-1
