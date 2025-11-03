@@ -87,18 +87,6 @@ export class PipelineLambdasStack extends cdk.Stack {
       ],
     }));
 
-    // DynamoDB permissions for build hash change detection
-    codeBuildRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'dynamodb:GetItem',
-        'dynamodb:PutItem',
-      ],
-      resources: [
-        `arn:aws:dynamodb:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:table:${appPrefix}BuildHashes`,
-      ],
-    }));
-
     // Single CodeBuild project that builds and deploys all Lambda functions
     // Note: No source property - source comes from CodePipeline Action
     const lambdasBuildProject = new codebuild.PipelineProject(this, 'LambdasBuildDeployProject', {

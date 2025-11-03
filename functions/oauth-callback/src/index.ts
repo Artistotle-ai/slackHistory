@@ -41,6 +41,18 @@ export const handler = async (
     try {
       ({ code, state } = validateQueryParams(queryParams));
     } catch (error) {
+      // If this is a browser request (favicon, healthcheck, etc.) without OAuth params,
+      // return 404 instead of logging as error
+      const isBrowserRequest = !queryParams.code && !queryParams.error;
+      if (isBrowserRequest) {
+        logger.debug("Browser request without OAuth parameters, ignoring");
+        return {
+          statusCode: 404,
+          body: "Not Found",
+          headers: { "Content-Type": "text/plain" },
+        };
+      }
+
       logger.error("Query parameter validation failed", error);
       return createErrorResponse(400, formatErrorMessage(error));
     }

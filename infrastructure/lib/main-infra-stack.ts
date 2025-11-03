@@ -68,25 +68,6 @@ export class MainInfraStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // DynamoDB table for build hashes (change detection)
-    // Simple table: buildKey (PK), hash (string), ttl (number)
-    const buildHashesTable = new dynamodb.Table(this, 'BuildHashesTable', {
-      tableName: `${appPrefix}BuildHashes`,
-      partitionKey: {
-        name: 'buildKey',
-        type: dynamodb.AttributeType.STRING,
-      },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      timeToLiveAttribute: 'ttl',
-    });
-
-    // Export table name for pipeline stacks to reference
-    new cdk.CfnOutput(this, 'BuildHashesTableName', {
-      value: buildHashesTable.tableName,
-      exportName: `${appPrefix}BuildHashesTableName`,
-    });
-
     // S3 bucket for Slack files
     this.slackFilesBucket = new s3.Bucket(this, 'SlackFilesBucket', {
       bucketName: `${appPrefix.toLowerCase()}-slack-files-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,

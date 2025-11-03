@@ -16,12 +16,10 @@ export interface BaseRolesStackProps extends cdk.StackProps {
  * - S3 artifact bucket for CodePipeline
  * - Secrets Manager placeholders for Slack credentials
  * - CodeStar connection for GitHub integration
- * - Shared IAM roles for CI/CD operations
  */
 export class BaseRolesStack extends cdk.Stack {
   public readonly artifactBucket: s3.Bucket;
   public readonly slackSigningSecretSecret: secretsmanager.Secret;
-  public readonly ciRole: iam.Role;
   public readonly githubConnection: codeconnections.CfnConnection;
 
   constructor(scope: Construct, id: string, props: BaseRolesStackProps) {
@@ -64,41 +62,6 @@ export class BaseRolesStack extends cdk.Stack {
       // TODO: Populate this secret after stack deployment
     });
 
-    // Temporary: Keep old bot token secret for backward compatibility during migration
-    const slackBotTokenSecret = new secretsmanager.Secret(this, 'SlackBotTokenSecret', {
-      secretName: `${appPrefix}/slack/bot-token`,
-      description: 'Slack bot token (deprecated - use OAuth flow instead)',
-      // TODO: Remove this secret after migration to OAuth flow
-    });
-
-    // CI Role for CodePipeline deployments
-    this.ciRole = new iam.Role(this, 'CiRole', {
-      roleName: `${appPrefix}CiRole`,
-      assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
-      description: 'Role for CodePipeline to execute deployments',
-    });
-
-    // TODO: Define specific permissions for CI role (CDK deploy, CloudFormation, etc.)
-    // Add managed policies or inline policies as needed
-    this.ciRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodePipeline_FullAccess')
-    );
-
-    // Add CDK deployment permissions
-    this.ciRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'cloudformation:*',
-        's3:*',
-        'iam:*',
-        'lambda:*',
-        'dynamodb:*',
-        'secretsmanager:*',
-        'kms:*',
-      ],
-      resources: ['*'], // TODO: Restrict to specific resources for security
-    }));
-
     // GitHub CodeStar Connection
     this.githubConnection = new codeconnections.CfnConnection(this, 'GitHubConnection', {
       connectionName: `${appPrefix}-github`,
@@ -115,11 +78,6 @@ export class BaseRolesStack extends cdk.Stack {
       value: this.slackSigningSecretSecret.secretArn,
       description: 'Secrets Manager ARN for Slack signing secret',
       exportName: `${appPrefix}SlackSigningSecretArn`,
-    });
-
-    new cdk.CfnOutput(this, 'CiRoleArn', {
-      value: this.ciRole.roleArn,
-      description: 'IAM role ARN for CI/CD operations',
     });
 
     // Export connection ARN for use in pipeline stacks
@@ -139,13 +97,6 @@ export class BaseRolesStack extends cdk.Stack {
       value: slackClientSecretSecret.secretArn,
       description: 'Secrets Manager ARN for Slack OAuth client secret',
       exportName: `${appPrefix}SlackClientSecretArn`,
-    });
-
-    // Temporary: Export old bot token secret for backward compatibility
-    new cdk.CfnOutput(this, 'SlackBotTokenSecretArn', {
-      value: slackBotTokenSecret.secretArn,
-      description: 'Secrets Manager ARN for Slack bot token (deprecated)',
-      exportName: `${appPrefix}SlackBotTokenSecretArn`,
     });
 
     // Export CDK bootstrap role ARNs for use in pipeline stacks

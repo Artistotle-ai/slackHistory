@@ -166,8 +166,11 @@ describe('handler', () => {
     it('should return 400 if code is missing', async () => {
       const request = createTestRequest();
 
+      // Include an error parameter to indicate this is not a browser request
+      // This prevents the handler from treating it as a browser request (favicon, etc.)
       mockGetQueryParams.mockReturnValue({
         state: 'test-state',
+        error: 'invalid_request',
       });
 
       mockValidateQueryParams.mockImplementation(() => {
