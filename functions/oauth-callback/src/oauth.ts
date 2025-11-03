@@ -29,6 +29,14 @@ export async function exchangeCodeForTokens(
   clientSecret: string,
   redirectUri: string
 ): Promise<SlackOAuthResponse> {
+  // Debug log (client_secret is masked)
+  console.log('OAuth exchange request:', {
+    code: code.substring(0, 20) + '...',
+    client_id: clientId,
+    client_secret: '***' + clientSecret.substring(clientSecret.length - 4),
+    redirect_uri: redirectUri,
+  });
+
   const response = await fetch("https://slack.com/api/oauth.v2.access", {
     method: "POST",
     headers: {

@@ -6,10 +6,11 @@
     "types": ["jest", "node"],
     "baseUrl": ".",
     "paths": {
-      "mnemosyne-slack-shared": ["../slack-shared/src/index.ts"]
+      "mnemosyne-slack-shared": ["../slack-shared/src/index.ts"],
+      "@aws-sdk/client-lambda": ["./src/types/@aws-sdk__client-lambda.d.ts"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "src/types/**/*"],
   "exclude": ["node_modules", "dist"]
 }
 

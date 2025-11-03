@@ -8,7 +8,6 @@ module.exports = {
   moduleNameMapper: {
     '^mnemosyne-slack-shared$': path.resolve(__dirname, '../slack-shared/src/index.ts'),
     '^(\\.{1,2}/.*)\\.js$': '$1',
-    '^@aws-sdk/client-lambda$': '<rootDir>/src/__tests__/__mocks__/@aws-sdk/client-lambda.ts',
   },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {

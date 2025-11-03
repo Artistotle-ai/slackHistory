@@ -323,9 +323,10 @@ describe('handler', () => {
       const response = await handler(request);
 
       expect(response.statusCode).toBe(500);
+      // getRedirectUri now checks AWS_LAMBDA_FUNCTION_NAME first
       expect(mockCreateErrorResponse).toHaveBeenCalledWith(
         500,
-        'Internal Server Error: REDIRECT_URI environment variable is required'
+        expect.stringContaining('AWS_LAMBDA_FUNCTION_NAME')
       );
     });
 
