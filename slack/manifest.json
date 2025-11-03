@@ -29,12 +29,12 @@
       ]
     },
     "redirect_urls": [
-      "https://5m5wxir5tig2ei3wvbavdepfvu0nijee.lambda-url.eu-west-1.on.aws/"
+      "yourOauthFunctionUrl"
     ]
   },
   "settings": {
     "event_subscriptions": {
-      "request_url": "https://f2hgrlxhaj2phs45ea6nnzyo4a0hriuo.lambda-url.eu-west-1.on.aws/",
+      "request_url": "yourMessageListenerFunctionUrl",
       "bot_events": [
         "message.channels",
         "message.groups",
