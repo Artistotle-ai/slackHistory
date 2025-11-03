@@ -34,6 +34,22 @@ jest.mock('@aws-sdk/client-s3', () => ({
   PutObjectCommand: jest.fn((params: any) => ({ params })),
 }));
 
+// Mock stream module
+jest.mock('stream', () => ({
+  PassThrough: jest.fn(function() {
+    return {
+      pipe: jest.fn().mockReturnThis(),
+      on: jest.fn(),
+      end: jest.fn(),
+      destroy: jest.fn(),
+      destroyed: false,
+      write: jest.fn().mockReturn(true),
+      writable: true,
+      readable: true,
+    };
+  }),
+}));
+
 describe('file-processor', () => {
   const mockGetValidBotToken = shared.getValidBotToken as jest.Mock;
   const mockS3Send = mockS3Client.send as jest.Mock;
@@ -91,6 +107,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -144,6 +162,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -198,6 +218,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -243,6 +265,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -281,6 +305,9 @@ describe('file-processor', () => {
       const mockResponse = {
         statusCode: 404,
         headers: {},
+        on: jest.fn(),
+        pipe: jest.fn(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -347,6 +374,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -418,6 +447,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -564,6 +595,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -608,6 +641,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -652,6 +687,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -695,6 +732,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -752,6 +791,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -808,6 +849,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {
@@ -985,6 +1028,8 @@ describe('file-processor', () => {
             setImmediate(() => handler());
           }
         }),
+        pipe: jest.fn().mockReturnThis(),
+        resume: jest.fn(),
       };
 
       const mockRequest: MockRequest = {

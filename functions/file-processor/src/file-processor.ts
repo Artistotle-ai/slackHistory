@@ -1,6 +1,7 @@
 // Lazy load AWS SDK and Node.js modules for better cold start performance
 // These heavy dependencies are only loaded when file processing is actually needed
 let s3ClientModule: typeof import('@aws-sdk/client-s3') | null = null;
+let s3UploadModule: typeof import('@aws-sdk/lib-storage') | null = null;
 let httpModule: typeof import('http') | null = null;
 let httpsModule: typeof import('https') | null = null;
 let streamModule: typeof import('stream') | null = null;
@@ -16,6 +17,16 @@ async function getS3Module() {
     s3ClientModule = await import('@aws-sdk/client-s3');
   }
   return s3ClientModule;
+}
+
+/**
+ * Lazy load S3 Upload module
+ */
+async function getS3UploadModule() {
+  if (!s3UploadModule) {
+    s3UploadModule = await import('@aws-sdk/lib-storage');
+  }
+  return s3UploadModule;
 }
 
 /**
@@ -72,6 +83,7 @@ async function streamFileFromSlackToS3(
 ): Promise<void> {
   // Lazy load modules when actually needed
   const s3Module = await getS3Module();
+  const s3UploadMod = await getS3UploadModule();
   const http = getHttpModule();
   const https = getHttpsModule();
 
@@ -86,6 +98,7 @@ async function streamFileFromSlackToS3(
     const passThrough = new streamMod.PassThrough();
     let uploadStarted = false;
     let uploadCompleted = false;
+    let upload: any = null;
 
     // Configure HTTP request to Slack API
     // Set timeout to prevent hanging requests (5 minutes max for large files)
@@ -134,19 +147,23 @@ async function streamFileFromSlackToS3(
       // This intermediate stream allows better error handling
       res.pipe(passThrough);
 
-      // Stream to S3 using PassThrough stream
-      // This allows proper error handling and prevents non-retryable errors
-      const uploadParams = {
-        Bucket: bucketName,
-        Key: s3Key,
-        Body: passThrough,
-        ContentType: contentType || res.headers['content-type'] || 'application/octet-stream',
-      };
-
+      // Use Upload class for streams of unknown length (multipart upload)
+      // PutObjectCommand requires Content-Length header which we don't have
+      // Upload handles multipart uploads automatically for streams
       uploadStarted = true;
 
-      // Upload stream to S3
-      s3Client.send(new s3Module.PutObjectCommand(uploadParams))
+      upload = new s3UploadMod.Upload({
+        client: s3Client,
+        params: {
+          Bucket: bucketName,
+          Key: s3Key,
+          Body: passThrough,
+          ContentType: contentType || res.headers['content-type'] || 'application/octet-stream',
+        },
+      });
+
+      // Upload stream to S3 using multipart upload
+      upload.done()
         .then(() => {
           uploadCompleted = true;
           logger.info(`Successfully uploaded ${s3Key} to S3`);
@@ -156,6 +173,12 @@ async function streamFileFromSlackToS3(
           uploadCompleted = true;
           if (!passThrough.destroyed) {
             passThrough.destroy();
+          }
+          // Abort multipart upload if it was started
+          if (upload) {
+            upload.abort().catch(() => {
+              // Ignore abort errors
+            });
           }
           logger.error(`S3 upload failed for ${s3Key}`, err);
           reject(new Error(`Failed to upload to S3: ${err.message}`));
@@ -167,8 +190,16 @@ async function streamFileFromSlackToS3(
       if (!uploadStarted) {
         logger.error(`HTTP request error before upload started for ${s3Key}`, err);
         reject(new Error(`Failed to download from Slack: ${err.message}`));
-      } else if (!passThrough.destroyed) {
-        passThrough.destroy();
+      } else {
+        if (!passThrough.destroyed) {
+          passThrough.destroy();
+        }
+        // Abort multipart upload if it was started
+        if (upload) {
+          upload.abort().catch(() => {
+            // Ignore abort errors
+          });
+        }
         logger.error(`HTTP request error after upload started for ${s3Key}`, err);
         reject(new Error(`Request error after upload started: ${err.message}`));
       }
@@ -180,8 +211,16 @@ async function streamFileFromSlackToS3(
       logger.warn(`Request timeout for ${s3Key}`);
       if (!uploadStarted) {
         reject(new Error('Request timeout'));
-      } else if (!passThrough.destroyed) {
-        passThrough.destroy();
+      } else {
+        if (!passThrough.destroyed) {
+          passThrough.destroy();
+        }
+        // Abort multipart upload if it was started
+        if (upload) {
+          upload.abort().catch(() => {
+            // Ignore abort errors
+          });
+        }
         reject(new Error('Request timeout after upload started'));
       }
     });
