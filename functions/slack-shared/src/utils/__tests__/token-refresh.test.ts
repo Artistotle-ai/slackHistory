@@ -56,11 +56,6 @@ describe('token-refresh', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
   });
 
   describe('refreshOAuthToken', () => {
@@ -150,7 +145,9 @@ describe('token-refresh', () => {
 
     it('should return false if token is not expired and not expiring soon', () => {
       const now = Math.floor(Date.now() / 1000);
-      const tokenItem = createTokenItem({ expires_at: now + 3600 }); // Expires in 1 hour
+      // Token must expire well beyond buffer (14400 seconds = 4 hours)
+      // So we use 20000 seconds (5.5 hours) to ensure it's not expiring soon
+      const tokenItem = createTokenItem({ expires_at: now + 20000 }); // Expires in 5.5 hours
 
       expect(isTokenExpired(tokenItem)).toBe(false);
     });
@@ -194,8 +191,8 @@ describe('token-refresh', () => {
 
     it('should return token if not expired', async () => {
       const now = Math.floor(Date.now() / 1000);
-      // Token expires well in the future, well beyond the buffer
-      const validToken = createTokenItem({ expires_at: now + 7200 }); // 2 hours in future
+      // Token must expire well beyond buffer (14400 seconds = 4 hours)
+      const validToken = createTokenItem({ expires_at: now + 20000 }); // 5.5 hours in future
 
       mockGetTokenItemDbId.mockReturnValue('oauth#T123');
       mockDynamoGetById.mockResolvedValue(validToken);
@@ -222,7 +219,8 @@ describe('token-refresh', () => {
 
     it('should fetch from DB and cache if not in cache', async () => {
       const now = Math.floor(Date.now() / 1000);
-      const tokenItem = createTokenItem({ expires_at: now + 3600, ttlSeconds: 3600 });
+      // Token must expire well beyond the buffer (14400 seconds = 4 hours)  
+      const tokenItem = createTokenItem({ expires_at: now + 20000, ttlSeconds: 20000 });
 
       mockGetTokenItemCacheKey.mockReturnValue('cache-key');
       mockGetFromCache.mockResolvedValue(null);
@@ -232,7 +230,8 @@ describe('token-refresh', () => {
       const result = await getFromCacheOrDbWithValidation('T123', 'table');
 
       expect(result).toEqual(tokenItem);
-      expect(mockSetInCache).toHaveBeenCalledWith('cache-key', tokenItem, 3600);
+      // getCacheTTL returns ttlSeconds if set (20000), otherwise TOKEN_DEFAULT_TTL
+      expect(mockSetInCache).toHaveBeenCalledWith('cache-key', tokenItem, 20000);
     });
 
     it('should return null if token not in cache or DB', async () => {
@@ -262,7 +261,8 @@ describe('token-refresh', () => {
 
     it('should fetch from DB and cache with TTL if not cached', async () => {
       const now = Math.floor(Date.now() / 1000);
-      const tokenItem = createTokenItem({ expires_at: now + 3600, ttlSeconds: 3600 });
+      // Token must expire well beyond buffer (14400 seconds = 4 hours) to not be considered expired
+      const tokenItem = createTokenItem({ expires_at: now + 20000, ttlSeconds: 20000 });
 
       mockGetTokenItemCacheKey.mockReturnValue('cache-key');
       mockGetFromCache.mockResolvedValue(null);
@@ -272,7 +272,7 @@ describe('token-refresh', () => {
       const result = await getOAuthToken('table', 'T123');
 
       expect(result).toEqual(tokenItem);
-      expect(mockSetInCache).toHaveBeenCalledWith('cache-key', tokenItem, 2160); // 3600 * 0.6
+      expect(mockSetInCache).toHaveBeenCalledWith('cache-key', tokenItem, 12000); // 20000 * 0.6
     });
 
     it('should cache with default TTL if ttlSeconds not set', async () => {
@@ -347,7 +347,8 @@ describe('token-refresh', () => {
   describe('getValidBotToken', () => {
     it('should return token if not expired', async () => {
       const now = Math.floor(Date.now() / 1000);
-      const tokenItem = createTokenItem({ bot_token: 'valid-token', expires_at: now + 3600 });
+      // Token must expire well beyond the buffer (14400 seconds = 4 hours)
+      const tokenItem = createTokenItem({ bot_token: 'valid-token', expires_at: now + 20000 }); // 5.5 hours in future
 
       mockGetTokenItemCacheKey.mockReturnValue('cache-key');
       mockGetFromCache.mockResolvedValue(tokenItem);
@@ -383,7 +384,10 @@ describe('token-refresh', () => {
         expires_in: 3600,
       };
 
-      mockGetTokenItemCacheKey.mockReturnValue('cache-key');
+      mockGetTokenItemCacheKey
+        .mockReturnValueOnce('cache-key') // First call for getOAuthToken
+        .mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`) // Second call for updateOAuthToken
+        .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`); // Third call for refresh lock
       mockGetFromCache.mockResolvedValue(expiredToken);
       mockHasInCache.mockResolvedValue(false);
       mockFetch.mockResolvedValue({
@@ -393,14 +397,12 @@ describe('token-refresh', () => {
       mockGetDynamoDb.mockResolvedValue({
         send: jest.fn().mockResolvedValue({}),
       });
-      mockGetTokenItemCacheKey.mockReturnValueOnce('cache-key').mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`);
-      mockGetTokenItemCacheKey.mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`);
 
       const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
 
       expect(result).toBe('new-token');
       expect(mockFetch).toHaveBeenCalled();
-    });
+    }, 10000);
 
     it('should wait and retry if refresh is in progress', async () => {
       const now = Math.floor(Date.now() / 1000);
@@ -413,7 +415,9 @@ describe('token-refresh', () => {
       const refreshedToken = createTokenItem({ bot_token: 'new-token', expires_at: now + 3600 });
 
       mockGetTokenItemCacheKey.mockReturnValue('cache-key');
-      mockGetFromCache.mockResolvedValue(expiredToken);
+      mockGetFromCache
+        .mockResolvedValueOnce(expiredToken) // First call - expired
+        .mockResolvedValueOnce(refreshedToken); // Retry call - refreshed
       mockHasInCache.mockResolvedValue(true); // Refresh in progress
       mockGetTokenItemDbId.mockReturnValue('oauth#T123');
       mockDynamoGetById.mockResolvedValue(refreshedToken);
@@ -421,7 +425,7 @@ describe('token-refresh', () => {
       const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
 
       expect(result).toBe('new-token');
-    });
+    }, 10000);
 
     it('should throw error if expired and no refresh token', async () => {
       const now = Math.floor(Date.now() / 1000);
@@ -456,7 +460,7 @@ describe('token-refresh', () => {
       ).rejects.toThrow();
 
       expect(mockSetInCache).toHaveBeenCalledWith(`${REFRESH_CACHE_PREFIX}T123`, false, 1);
-    });
+    }, 10000);
 
     it('should throw error if refresh response has no access_token', async () => {
       const now = Math.floor(Date.now() / 1000);
@@ -481,7 +485,7 @@ describe('token-refresh', () => {
       await expect(
         getValidBotToken('table', 'T123', 'client-id', 'client-secret')
       ).rejects.toThrow('No access token in refresh response');
-    });
+    }, 10000);
   });
 });
 

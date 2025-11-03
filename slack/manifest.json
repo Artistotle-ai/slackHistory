@@ -23,10 +23,14 @@
         "files:read",
         "groups:history",
         "groups:read",
-        "users:read"
+        "users:read",
+        "im:history",
+        "mpim:history"
       ]
     },
-    "redirect_urls": []
+    "redirect_urls": [
+      "https://5m5wxir5tig2ei3wvbavdepfvu0nijee.lambda-url.eu-west-1.on.aws/"
+    ]
   },
   "settings": {
     "event_subscriptions": {
@@ -34,6 +38,8 @@
       "bot_events": [
         "message.channels",
         "message.groups",
+        "message.im",
+        "message.mpim",
         "channel_created",
         "channel_deleted",
         "channel_archive",
