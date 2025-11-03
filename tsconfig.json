@@ -1,14 +1,11 @@
 {
   "compilerOptions": {
-    // Use node20 module mode for stable Node.js 20+ behavior
-    // This provides consistent, predictable interop between CommonJS and ESM modules
-    // Unlike nodenext which evolves, node20 implies a fixed --target es2023
-    "target": "ES2023",
-    "module": "node20",
-    "lib": ["ES2023"],
-    // Use nodenext for moduleResolution with node20 module mode
-    // This provides Node.js 20+ module resolution behavior
-    "moduleResolution": "nodenext",
+    // ES2022 is the latest widely-supported target (ES2023 support varies by tooling)
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    // Note: module and moduleResolution are set per-package:
+    // - Functions use "node20" / "nodenext" for Node.js 20+ ESM
+    // - Infrastructure uses "commonjs" / "node" for CDK
     "types": [],
     "strict": true,
     "noImplicitAny": true,
@@ -22,9 +19,11 @@
     "sourceMap": false,
     "experimentalDecorators": true,
     "strictPropertyInitialization": true,
+    "moduleResolution": "node",
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   }
 }
+

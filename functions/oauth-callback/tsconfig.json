@@ -1,9 +1,13 @@
 {
-  "extends": "../tsconfig.base.json",
+  "extends": "../tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "types": []
+    "types": ["jest", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "mnemosyne-slack-shared": ["../slack-shared/src/index.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
