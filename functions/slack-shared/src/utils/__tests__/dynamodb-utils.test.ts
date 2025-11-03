@@ -13,7 +13,18 @@ import * as cache from '../cache';
 
 jest.mock('../cache');
 jest.mock('@aws-sdk/client-dynamodb');
-jest.mock('@aws-sdk/lib-dynamodb');
+jest.mock('@aws-sdk/lib-dynamodb', () => ({
+  GetCommand: jest.fn(),
+  PutCommand: jest.fn(),
+  UpdateCommand: jest.fn(),
+  DeleteCommand: jest.fn(),
+  QueryCommand: jest.fn(),
+  DynamoDBDocumentClient: {
+    from: jest.fn((client) => ({
+      send: jest.fn(),
+    })),
+  },
+}));
 jest.mock('@aws-sdk/node-http-handler');
 
 describe('dynamodb-utils', () => {
