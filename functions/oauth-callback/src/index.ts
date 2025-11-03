@@ -62,9 +62,9 @@ export const handler = async (
     // Credentials are needed to exchange authorization code for access token
     const credentials = await getOAuthCredentials(config);
 
-    // Get redirect URI from environment variable
+    // Get redirect URI (either from environment variable or Lambda Function URL)
     // Must match the redirect_uri registered in Slack app settings
-    const redirectUri = getRedirectUri();
+    const redirectUri = await getRedirectUri();
 
     // Exchange authorization code for access/refresh tokens
     // This is the OAuth 2.0 token exchange step

@@ -97,7 +97,7 @@ describe('handler', () => {
       state: 'test-state-456',
     });
 
-    mockGetRedirectUri.mockReturnValue('https://example.com/oauth/callback');
+    mockGetRedirectUri.mockResolvedValue('https://example.com/oauth/callback');
 
     const mockOAuthResponse = {
       ok: true,
@@ -317,10 +317,8 @@ describe('handler', () => {
     it('should handle errors in getRedirectUri', async () => {
       const request = createTestRequest();
 
-      const redirectError = new Error('REDIRECT_URI environment variable is required');
-      mockGetRedirectUri.mockImplementation(() => {
-        throw redirectError;
-      });
+      const redirectError = new Error('AWS_LAMBDA_FUNCTION_NAME environment variable not found');
+      mockGetRedirectUri.mockRejectedValue(redirectError);
 
       const response = await handler(request);
 

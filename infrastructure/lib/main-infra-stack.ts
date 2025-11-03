@@ -159,6 +159,17 @@ export class MainInfraStack extends cdk.Stack {
       })
     );
 
+    // Lambda permission to read its own Function URL config
+    oauthLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:GetFunctionUrlConfig'],
+        resources: [
+          `arn:aws:lambda:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:function:${appPrefix}OAuthCallback`,
+        ],
+      })
+    );
+
     // Explicit LogGroups for Lambda functions with 7-day retention
     const messageListenerLogGroup = new logs.LogGroup(this, 'MessageListenerLogGroup', {
       logGroupName: `/aws/lambda/${appPrefix}MessageListener`,
@@ -280,9 +291,9 @@ export class MainInfraStack extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
     });
 
-    // Add the redirect URI environment variable after creating the Function URL
-    // This is needed for OAuth callback to know its own URL when exchanging codes with Slack
-    oauthCallbackFunction.addEnvironment('REDIRECT_URI', oauthCallbackUrl.url);
+    // Note: REDIRECT_URI is NOT set as environment variable to avoid circular dependency
+    // (Function URL depends on Lambda, Lambda environment would depend on Function URL)
+    // Instead, Lambda will retrieve its own Function URL at runtime using AWS SDK
 
     // Output important resources
     new cdk.CfnOutput(this, 'SlackArchiveTableName', {

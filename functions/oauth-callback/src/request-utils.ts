@@ -29,17 +29,48 @@ export function createSuccessResponse(): LambdaFunctionURLResponse {
 }
 
 /**
- * Get redirect URI from environment variable
- * This is set during Lambda function deployment via CDK
+ * Get redirect URI from environment variable or Lambda Function URL
+ *
+ * Priority:
+ * 1. REDIRECT_URI environment variable (if set)
+ * 2. Construct from AWS_LAMBDA_FUNCTION_NAME using AWS SDK
+ *
+ * Note: We don't set REDIRECT_URI in CDK to avoid circular dependencies.
+ * Instead, Lambda retrieves its own Function URL at runtime.
  */
-export function getRedirectUri(): string {
+export async function getRedirectUri(): Promise<string> {
+  // Check environment variable first (for testing/override)
   const envRedirectUri = process.env.REDIRECT_URI;
-  if (!envRedirectUri) {
+  if (envRedirectUri) {
+    return envRedirectUri;
+  }
+
+  // Get Function URL using AWS SDK
+  const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
+  if (!functionName) {
+    throw new Error("AWS_LAMBDA_FUNCTION_NAME environment variable not found");
+  }
+
+  try {
+    const { LambdaClient, GetFunctionUrlConfigCommand } = await import("@aws-sdk/client-lambda");
+    const client = new LambdaClient({ region: process.env.AWS_REGION });
+
+    const response = await client.send(
+      new GetFunctionUrlConfigCommand({
+        FunctionName: functionName,
+      })
+    );
+
+    if (!response.FunctionUrl) {
+      throw new Error(`No Function URL configured for ${functionName}`);
+    }
+
+    return response.FunctionUrl;
+  } catch (error: any) {
     throw new Error(
-      "REDIRECT_URI environment variable is required. This should be set during Lambda deployment."
+      `Failed to retrieve Function URL for ${functionName}: ${error.message}`
     );
   }
-  return envRedirectUri;
 }
 
 /**

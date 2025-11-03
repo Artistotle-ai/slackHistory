@@ -46,7 +46,7 @@ phases:
         echo "✓ file-processor deployed"
       - |
         export APP_PREFIX="${APP_PREFIX:-Mnemosyne}"
-        
+
         # Function: oauth-callback
         echo "Packaging oauth-callback..."
         cd functions/oauth-callback/dist

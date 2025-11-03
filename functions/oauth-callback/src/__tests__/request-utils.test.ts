@@ -7,9 +7,18 @@ import {
 } from '../request-utils';
 import { LambdaFunctionURLRequest } from 'mnemosyne-slack-shared';
 
+// Mock @aws-sdk/client-lambda before importing
+jest.mock('@aws-sdk/client-lambda', () => ({
+  LambdaClient: jest.fn().mockImplementation(() => ({
+    send: jest.fn(),
+  })),
+  GetFunctionUrlConfigCommand: jest.fn().mockImplementation((params) => params),
+}));
+
 describe('request-utils', () => {
   beforeEach(() => {
     delete process.env.REDIRECT_URI;
+    jest.clearAllMocks();
   });
 
   describe('createSuccessResponse', () => {
@@ -24,25 +33,29 @@ describe('request-utils', () => {
   });
 
   describe('getRedirectUri', () => {
-    it('should get redirect URI from environment variable', () => {
+    it('should get redirect URI from environment variable when set', async () => {
       process.env.REDIRECT_URI = 'https://example.com/oauth/callback';
 
-      const redirectUri = getRedirectUri();
+      const redirectUri = await getRedirectUri();
 
       expect(redirectUri).toBe('https://example.com/oauth/callback');
     });
 
-    it('should throw error if REDIRECT_URI is missing', () => {
-      expect(() => getRedirectUri()).toThrow(
-        'REDIRECT_URI environment variable is required. This should be set during Lambda deployment.'
-      );
+    it('should attempt to fetch from Lambda if REDIRECT_URI not set', async () => {
+      delete process.env.REDIRECT_URI;
+      process.env.AWS_LAMBDA_FUNCTION_NAME = 'TestFunction';
+      process.env.AWS_REGION = 'us-east-1';
+
+      // Mock will fail since we don't have actual Lambda client in tests
+      await expect(getRedirectUri()).rejects.toThrow();
     });
 
-    it('should throw error if REDIRECT_URI is empty string', () => {
-      process.env.REDIRECT_URI = '';
+    it('should throw error if AWS_LAMBDA_FUNCTION_NAME is missing', async () => {
+      delete process.env.REDIRECT_URI;
+      delete process.env.AWS_LAMBDA_FUNCTION_NAME;
 
-      expect(() => getRedirectUri()).toThrow(
-        'REDIRECT_URI environment variable is required. This should be set during Lambda deployment.'
+      await expect(getRedirectUri()).rejects.toThrow(
+        'AWS_LAMBDA_FUNCTION_NAME environment variable not found'
       );
     });
   });
