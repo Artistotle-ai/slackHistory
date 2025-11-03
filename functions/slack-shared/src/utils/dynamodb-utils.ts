@@ -90,7 +90,11 @@ export async function getDynamoDb(): Promise<any> {
       dynamoDbDocModule = await import("@aws-sdk/lib-dynamodb");
     }
     const client = await getDynamoDbClient();
-    dynamoDb = dynamoDbDocModule.DynamoDBDocumentClient.from(client);
+    dynamoDb = dynamoDbDocModule.DynamoDBDocumentClient.from(client, {
+      marshallOptions: {
+        removeUndefinedValues: true, // Remove undefined values from objects before writing to DynamoDB
+      },
+    });
   }
   return dynamoDb;
 }
