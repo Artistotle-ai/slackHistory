@@ -33,6 +33,16 @@ export function parseEvent(event: SlackEvent): StrictSlackEvent {
     }
   }
 
+  // Unwrap event_callback envelope
+  // Slack wraps actual events in an event_callback envelope with the real event nested inside
+  if (event.type === "event_callback" && event.event && typeof event.event === "object") {
+    // Extract team_id from wrapper and merge with inner event
+    const innerEvent = event.event as SlackEvent;
+    const team_id = event.team_id || innerEvent.team_id;
+    // Recursively parse the inner event
+    return parseEvent({ ...innerEvent, team_id } as SlackEvent);
+  }
+
   // Validate team_id is present for all other events
   if (!event.team_id || typeof event.team_id !== "string") {
     const { type, ...rest } = event;

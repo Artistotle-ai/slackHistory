@@ -381,8 +381,8 @@ describe('handler', () => {
       expect(mockHandleUrlVerification).toHaveBeenCalled();
     });
 
-    it('should return 500 for unexpected errors', async () => {
-      // Test that parseRequestBody throws, which should return 400, not 500
+
+    it('should handle parseRequestBody errors gracefully', async () => {
       mockParseRequestBody.mockImplementation(() => {
         throw new Error('Invalid JSON');
       });
