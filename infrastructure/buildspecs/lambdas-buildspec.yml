@@ -25,10 +25,9 @@ phases:
         
         # Function: message-listener
         echo "Packaging message-listener..."
-        cd functions/message-listener
-        npm prune --production
-        zip -rq ../../message-listener-function.zip dist node_modules
-        cd ../..
+        cd functions/message-listener/dist
+        zip -rq ../../../message-listener-function.zip .
+        cd ../../..
         aws lambda update-function-code \
           --function-name "${APP_PREFIX}MessageListener" \
           --zip-file fileb://message-listener-function.zip
@@ -38,10 +37,9 @@ phases:
         
         # Function: file-processor
         echo "Packaging file-processor..."
-        cd functions/file-processor
-        npm prune --production
-        zip -rq ../../file-processor-function.zip dist node_modules
-        cd ../..
+        cd functions/file-processor/dist
+        zip -rq ../../../file-processor-function.zip .
+        cd ../../..
         aws lambda update-function-code \
           --function-name "${APP_PREFIX}FileProcessor" \
           --zip-file fileb://file-processor-function.zip
@@ -51,10 +49,9 @@ phases:
         
         # Function: oauth-callback
         echo "Packaging oauth-callback..."
-        cd functions/oauth-callback
-        npm prune --production
-        zip -rq ../../oauth-callback-function.zip dist node_modules
-        cd ../..
+        cd functions/oauth-callback/dist
+        zip -rq ../../../oauth-callback-function.zip .
+        cd ../../..
         aws lambda update-function-code \
           --function-name "${APP_PREFIX}OAuthCallback" \
           --zip-file fileb://oauth-callback-function.zip

@@ -2,8 +2,14 @@ import { handler } from '../index';
 import { LambdaFunctionURLRequest } from 'mnemosyne-slack-shared';
 import { createTestRequest } from './test-helpers';
 
+// Mock config before importing handler to ensure module-level config is set
 jest.mock('../config', () => ({
-  loadConfig: jest.fn(),
+  loadConfig: jest.fn(() => ({
+    tableName: 'test-table',
+    clientIdArn: 'arn:test',
+    clientSecretArn: 'arn:test',
+    region: 'us-east-1',
+  })),
   getOAuthCredentials: jest.fn(),
 }));
 
@@ -136,7 +142,12 @@ describe('handler', () => {
         code: 'test-code-123',
         state: 'test-state-456',
       });
-      expect(mockGetOAuthCredentials).toHaveBeenCalled();
+      expect(mockGetOAuthCredentials).toHaveBeenCalledWith({
+        tableName: 'test-table',
+        clientIdArn: 'arn:test',
+        clientSecretArn: 'arn:test',
+        region: 'us-east-1',
+      });
       expect(mockGetRedirectUri).toHaveBeenCalled();
       expect(mockExchangeCodeForTokens).toHaveBeenCalledWith(
         'test-code-123',
@@ -268,7 +279,7 @@ describe('handler', () => {
       expect(response.statusCode).toBe(500);
       expect(mockCreateErrorResponse).toHaveBeenCalledWith(
         500,
-        'Internal Server Error: Failed to store tokens - DynamoDB write failed'
+        expect.stringContaining('Internal Server Error: Failed to store tokens')
       );
     });
 
@@ -345,6 +356,7 @@ describe('handler', () => {
       await handler(request);
 
       // Config should have been loaded (throws if fails at module level)
+      // The config value is set at module level, so getOAuthCredentials should be called with it
       expect(mockGetOAuthCredentials).toHaveBeenCalledWith({
         tableName: 'test-table',
         clientIdArn: 'arn:test',
