@@ -103,7 +103,6 @@ export class PipelineLambdasStack extends cdk.Stack {
     // Note: No source property - source comes from CodePipeline Action
     const lambdasBuildProject = new codebuild.PipelineProject(this, 'LambdasBuildDeployProject', {
       projectName: `${appPrefix}LambdasBuildDeploy`,
-      badge: true, // Enable build badges
       environment: {
         buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
         computeType: codebuild.ComputeType.MEDIUM,
@@ -175,13 +174,6 @@ export class PipelineLambdasStack extends cdk.Stack {
       description: 'CodePipeline for all Lambda function deployments',
     });
 
-    // Output build badge URL (available after first build)
-    // Badge URL format: https://codebuild.<region>.amazonaws.com/badges?uuid=<project-uuid>
-    // Find the badge URL in AWS Console: CodeBuild -> Build projects -> <project-name> -> Badge
-    new cdk.CfnOutput(this, 'LambdasBuildProjectName', {
-      value: lambdasBuildProject.projectName,
-      description: 'CodeBuild project name - use this to find badge URL in AWS Console',
-    });
   }
 }
 

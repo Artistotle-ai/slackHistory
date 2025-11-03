@@ -94,7 +94,7 @@ describe('file-processor', () => {
       };
 
       const mockRequest: MockRequest = {
-        on: jest.fn((event: string, handler: Function) => {
+        on: jest.fn((_event: string, _handler: Function) => {
           // Handle error events for network errors
           return mockRequest;
         }),
@@ -147,7 +147,7 @@ describe('file-processor', () => {
       };
 
       const mockRequest: MockRequest = {
-        on: jest.fn((event: string, handler: Function) => {
+        on: jest.fn((_event: string, _handler: Function) => {
           // Handle error events for network errors
           return mockRequest;
         }),
