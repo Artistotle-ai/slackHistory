@@ -35,8 +35,8 @@ export const handler = async (
     // Extract and validate query parameters
     const queryParams = getQueryParams(event);
     let code: string;
-    let state: string;
-    
+    let state: string | undefined;
+
     try {
       ({ code, state } = validateQueryParams(queryParams));
     } catch (error) {

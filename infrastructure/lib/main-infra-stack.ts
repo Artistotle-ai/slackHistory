@@ -280,6 +280,10 @@ export class MainInfraStack extends cdk.Stack {
       authType: lambda.FunctionUrlAuthType.NONE,
     });
 
+    // Add the redirect URI environment variable after creating the Function URL
+    // This is needed for OAuth callback to know its own URL when exchanging codes with Slack
+    oauthCallbackFunction.addEnvironment('REDIRECT_URI', oauthCallbackUrl.url);
+
     // Output important resources
     new cdk.CfnOutput(this, 'SlackArchiveTableName', {
       value: this.slackArchiveTable.tableName,

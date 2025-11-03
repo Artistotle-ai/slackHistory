@@ -70,17 +70,30 @@ describe('request-utils', () => {
       );
     });
 
-    it('should throw error if state is missing', () => {
+    it('should allow missing state parameter', () => {
       const queryParams = {
         code: 'test-code-123',
       };
 
-      expect(() => validateQueryParams(queryParams)).toThrow(
-        "Bad Request: Missing 'state' parameter"
-      );
+      const result = validateQueryParams(queryParams);
+
+      expect(result.code).toBe('test-code-123');
+      expect(result.state).toBeUndefined();
     });
 
-    it('should throw error if both code and state are missing', () => {
+    it('should allow empty state parameter', () => {
+      const queryParams = {
+        code: 'test-code-123',
+        state: '',
+      };
+
+      const result = validateQueryParams(queryParams);
+
+      expect(result.code).toBe('test-code-123');
+      expect(result.state).toBeUndefined();
+    });
+
+    it('should throw error if code is missing', () => {
       const queryParams = {};
 
       expect(() => validateQueryParams(queryParams)).toThrow(
@@ -88,7 +101,7 @@ describe('request-utils', () => {
       );
     });
 
-    it('should handle empty string values', () => {
+    it('should handle empty code string', () => {
       const queryParams = {
         code: '',
         state: 'test-state',

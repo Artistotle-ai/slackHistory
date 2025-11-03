@@ -20,7 +20,7 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
   DeleteCommand: jest.fn(),
   QueryCommand: jest.fn(),
   DynamoDBDocumentClient: {
-    from: jest.fn((client) => ({
+    from: jest.fn((_client) => ({
       send: jest.fn(),
     })),
   },
