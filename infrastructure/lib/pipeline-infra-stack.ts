@@ -117,6 +117,7 @@ export class PipelineInfraStack extends cdk.Stack {
     // Single CodeBuild project for CDK build and deploy
     const project = new codebuild.PipelineProject(this, 'CdkBuildDeployProject', {
       projectName: `${appPrefix}CdkBuildDeploy`,
+      badge: true, // Enable build badges
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
         computeType: codebuild.ComputeType.MEDIUM,
@@ -183,6 +184,14 @@ export class PipelineInfraStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'InfraPipelineName', {
       value: pipeline.pipelineName,
       description: 'CodePipeline for infrastructure deployment',
+    });
+
+    // Output build badge URL (available after first build)
+    // Badge URL format: https://codebuild.<region>.amazonaws.com/badges?uuid=<project-uuid>
+    // Find the badge URL in AWS Console: CodeBuild -> Build projects -> <project-name> -> Badge
+    new cdk.CfnOutput(this, 'CdkBuildProjectName', {
+      value: project.projectName,
+      description: 'CodeBuild project name - use this to find badge URL in AWS Console',
     });
   }
 }

@@ -91,7 +91,6 @@ export class MainInfraStack extends cdk.Stack {
     this.slackFilesBucket = new s3.Bucket(this, 'SlackFilesBucket', {
       bucketName: `${appPrefix.toLowerCase()}-slack-files-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: false, // Disabled to reduce costs - archived files don't need versioning
       lifecycleRules: [

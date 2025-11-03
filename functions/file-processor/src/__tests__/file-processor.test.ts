@@ -22,11 +22,11 @@ const mockHttpRequest = jest.fn();
 const mockHttpsRequest = jest.fn();
 
 jest.mock('http', () => ({
-  request: mockHttpRequest,
+  request: (...args: any[]) => mockHttpRequest(...args),
 }));
 
 jest.mock('https', () => ({
-  request: mockHttpsRequest,
+  request: (...args: any[]) => mockHttpsRequest(...args),
 }));
 
 jest.mock('@aws-sdk/client-s3', () => ({
@@ -37,6 +37,11 @@ jest.mock('@aws-sdk/client-s3', () => ({
 describe('file-processor', () => {
   const mockGetValidBotToken = shared.getValidBotToken as jest.Mock;
   const mockS3Send = mockS3Client.send as jest.Mock;
+
+  interface MockRequest {
+    on: jest.Mock;
+    end: jest.Mock;
+  }
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -78,7 +83,12 @@ describe('file-processor', () => {
       };
 
       // Mock HTTPS request/response
-      const mockRequest = {
+      interface MockRequest {
+        on: jest.Mock;
+        end: jest.Mock;
+      }
+
+      const mockRequest: MockRequest = {
         on: jest.fn((event: string, handler: Function) => {
           if (event === 'error') {
             // Simulate successful request
@@ -126,7 +136,12 @@ describe('file-processor', () => {
       };
 
       let attemptCount = 0;
-      const mockRequest = {
+      interface MockRequest {
+        on: jest.Mock;
+        end: jest.Mock;
+      }
+
+      const mockRequest: MockRequest = {
         on: jest.fn((event: string, handler: Function) => {
           if (event === 'error') {
             attemptCount++;
@@ -187,7 +202,7 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockRequest = {
+      const mockRequest: MockRequest = {
         on: jest.fn((event: string, handler: Function) => {
           if (event === 'error') {
             setTimeout(() => handler(new Error('Network error')), 0);
@@ -226,7 +241,7 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockRequest = {
+      const mockRequest: MockRequest = {
         on: jest.fn((event: string, handler: Function) => {
           if (event === 'error') {
             setTimeout(() => {
@@ -270,7 +285,7 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockRequest = {
+      const mockRequest: MockRequest = {
         on: jest.fn((event: string, handler: Function) => {
           if (event === 'error') {
             setTimeout(() => {
@@ -332,7 +347,7 @@ describe('file-processor', () => {
       };
 
       // Mock successful HTTPS requests
-      const mockRequest = {
+      const mockRequest: MockRequest = {
         on: jest.fn((event: string, handler: Function) => {
           if (event === 'error') {
             setTimeout(() => {
@@ -404,7 +419,7 @@ describe('file-processor', () => {
       };
 
       // Mock successful HTTPS request for file1
-      const mockRequest = {
+      const mockRequest: MockRequest = {
         on: jest.fn((event: string, handler: Function) => {
           if (event === 'error') {
             setTimeout(() => {

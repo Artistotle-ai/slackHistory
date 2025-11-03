@@ -33,7 +33,6 @@ export class BaseRolesStack extends cdk.Stack {
     this.artifactBucket = new s3.Bucket(this, 'ArtifactBucket', {
       bucketName: `${appPrefix.toLowerCase()}-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: false, // Disabled to reduce costs - artifacts don't need versioning
       lifecycleRules: [

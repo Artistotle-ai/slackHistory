@@ -49,8 +49,8 @@ export function loadConfig(): Config {
  */
 export async function getOAuthCredentials(config: Config): Promise<OAuthCredentials> {
   // Check cache first
-  const cached = getFromCache<OAuthCredentials>(OAUTH_CREDENTIALS_CACHE_KEY);
-  if (cached) {
+  const cached = await getFromCache<OAuthCredentials>(OAUTH_CREDENTIALS_CACHE_KEY);
+  if (cached !== null && cached !== undefined) {
     return cached;
   }
 

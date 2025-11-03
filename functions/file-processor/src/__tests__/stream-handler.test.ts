@@ -17,11 +17,8 @@ jest.mock('mnemosyne-slack-shared', () => ({
   },
 }));
 
-// Mock unmarshall
-const mockUnmarshall = jest.fn();
-
 jest.mock('@aws-sdk/util-dynamodb', () => ({
-  unmarshall: mockUnmarshall,
+  unmarshall: jest.fn(),
 }));
 
 describe('stream-handler', () => {
@@ -30,10 +27,13 @@ describe('stream-handler', () => {
   const mockUpdateMessageWithS3Keys = dynamodbUpdates.updateMessageWithS3Keys as jest.Mock;
   const mockMarkMessageFilesFailed = dynamodbUpdates.markMessageFilesFailed as jest.Mock;
   const mockMarkMessageFailed = dynamodbUpdates.markMessageFailed as jest.Mock;
+  
+  const utilDynamodb = require('@aws-sdk/util-dynamodb');
+  const mockUnmarshallUtil = utilDynamodb.unmarshall as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUnmarshall.mockImplementation((item: any) => item);
+    mockUnmarshallUtil.mockImplementation((item: any) => item);
     mockProcessMessageFiles.mockResolvedValue({ s3Keys: [], failedFiles: [] });
     mockMaintainChannelIndex.mockResolvedValue(undefined);
     mockUpdateMessageWithS3Keys.mockResolvedValue(undefined);
@@ -70,7 +70,7 @@ describe('stream-handler', () => {
         clientSecret
       );
 
-      expect(mockUnmarshall).not.toHaveBeenCalled();
+      expect(mockUnmarshallUtil).not.toHaveBeenCalled();
       expect(mockProcessMessageFiles).not.toHaveBeenCalled();
       expect(mockMaintainChannelIndex).not.toHaveBeenCalled();
     });
@@ -90,7 +90,7 @@ describe('stream-handler', () => {
         clientSecret
       );
 
-      expect(mockUnmarshall).not.toHaveBeenCalled();
+      expect(mockUnmarshallUtil).not.toHaveBeenCalled();
     });
 
     it('should skip if item is null after unmarshalling', async () => {
@@ -101,7 +101,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall.mockReturnValue(null);
+      mockUnmarshallUtil.mockReturnValue(null);
 
       await processStreamRecord(
         record as any,
@@ -130,7 +130,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall.mockReturnValue(channelItem);
+      mockUnmarshallUtil.mockReturnValue(channelItem);
 
       await processStreamRecord(
         record as any,
@@ -172,7 +172,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall
+      mockUnmarshallUtil
         .mockReturnValueOnce(channelItem)
         .mockReturnValueOnce(oldChannelItem);
 
@@ -205,7 +205,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall.mockReturnValue(item);
+      mockUnmarshallUtil.mockReturnValue(item);
 
       await processStreamRecord(
         record as any,
@@ -235,7 +235,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall.mockReturnValue(messageItem);
+      mockUnmarshallUtil.mockReturnValue(messageItem);
 
       await processStreamRecord(
         record as any,
@@ -267,7 +267,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall.mockReturnValue(messageItem);
+      mockUnmarshallUtil.mockReturnValue(messageItem);
 
       await processStreamRecord(
         record as any,
@@ -303,7 +303,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall.mockReturnValue(messageItem);
+      mockUnmarshallUtil.mockReturnValue(messageItem);
       mockProcessMessageFiles.mockResolvedValue({
         s3Keys: ['slack/T123/C456/1234567890.123456/file1'],
         failedFiles: [],
@@ -354,7 +354,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall.mockReturnValue(messageItem);
+      mockUnmarshallUtil.mockReturnValue(messageItem);
       mockProcessMessageFiles.mockResolvedValue({
         s3Keys: ['slack/T123/C456/1234567890.123456/file1'],
         failedFiles: [
@@ -400,7 +400,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall.mockReturnValue(messageItem);
+      mockUnmarshallUtil.mockReturnValue(messageItem);
       const criticalError = new Error('Token refresh failed');
       mockProcessMessageFiles.mockRejectedValue(criticalError);
 
@@ -436,7 +436,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall.mockReturnValue(channelItem);
+      mockUnmarshallUtil.mockReturnValue(channelItem);
       const indexError = new Error('ChannelIndex error');
       mockMaintainChannelIndex.mockRejectedValue(indexError);
 
@@ -470,7 +470,7 @@ describe('stream-handler', () => {
         },
       };
 
-      mockUnmarshall.mockReturnValue(messageItem);
+      mockUnmarshallUtil.mockReturnValue(messageItem);
       mockProcessMessageFiles.mockResolvedValue({
         s3Keys: ['slack/T123/C456/1234567890.123456/file1'],
         failedFiles: [],
@@ -479,17 +479,18 @@ describe('stream-handler', () => {
       const updateError = new Error('DynamoDB update failed');
       mockUpdateMessageWithS3Keys.mockRejectedValue(updateError);
 
-      // Should not throw - error is logged but processing continues
-      await expect(
-        processStreamRecord(
-          record as any,
-          oauthConfig,
-          bucketName,
-          s3Client,
-          clientId,
-          clientSecret
-        )
-      ).rejects.toThrow('DynamoDB update failed');
+      // The function catches errors and marks message as failed, so it doesn't throw
+      await processStreamRecord(
+        record as any,
+        oauthConfig,
+        bucketName,
+        s3Client,
+        clientId,
+        clientSecret
+      );
+
+      // Verify that the message was marked as failed
+      expect(mockMarkMessageFailed).toHaveBeenCalled();
     });
   });
 });

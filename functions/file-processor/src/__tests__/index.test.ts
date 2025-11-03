@@ -301,14 +301,13 @@ describe('handler', () => {
 
       mockProcessStreamRecord
         .mockRejectedValueOnce('String error')
-        .mockRejectedValueOnce({ code: 'CustomError', message: 'Custom error' })
-        .mockResolvedValueOnce(undefined);
+        .mockRejectedValueOnce({ code: 'CustomError', message: 'Custom error' });
 
       const result = await handler(event, context);
 
-      // Handler should still succeed
+      // Handler should still succeed even if all records fail
       expect(result.statusCode).toBe(200);
-      expect(result.message).toBe('Processed 3 records');
+      expect(result.message).toBe('Processed 2 records');
     });
   });
 });
