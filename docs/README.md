@@ -2,6 +2,12 @@
 
 Slack History Archiver - bypasses free plan message retention limits by archiving messages, channels, and files to AWS.
 
+## Getting Started
+
+**New to Mnemosyne?** Start here: **[Get Started Guide](GET_STARTED.md)**
+
+The Get Started guide walks you through the complete setup process from deployment to verification, with links to detailed documentation at each step.
+
 ## Quick Links
 
 ### API
@@ -38,6 +44,10 @@ Slack History Archiver - bypasses free plan message retention limits by archivin
 
 ## Quick Start
 
+For a complete step-by-step guide, see **[Get Started](GET_STARTED.md)**.
+
+Quick deployment commands:
+
 ```bash
 cd infrastructure
 npm install
@@ -45,4 +55,4 @@ npx cdk bootstrap --profile default --region eu-west-1
 npx cdk deploy --all --profile default --region eu-west-1 --require-approval never
 ```
 
-See [Deployment Guide](infrastructure/deployment.md) for complete steps.
+See [Deployment Guide](infrastructure/deployment.md) for detailed deployment instructions.

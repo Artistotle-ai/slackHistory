@@ -34,3 +34,15 @@ This MVP focuses on **real-time data capture** from the point of deployment forw
 
 Early-stage startups, small teams, and free plan workspaces where all participants understand the trade-offs and explicitly agree to comprehensive message archiving in exchange for unlimited history retention.
 
+## Getting Started
+
+Ready to deploy Mnemosyne? Follow the **[Get Started Guide](docs/GET_STARTED.md)** for step-by-step instructions.
+
+The guide covers:
+- Infrastructure deployment
+- Slack app creation and configuration
+- Secrets management
+- Installation and verification
+
+For detailed documentation, see the [Documentation Index](docs/README.md).
+
