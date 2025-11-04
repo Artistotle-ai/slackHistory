@@ -695,6 +695,46 @@ describe('events', () => {
       expect(parsed.type).toBe('url_verification');
       expect((parsed as UrlVerificationEvent).token).toBeUndefined();
     });
+
+    it('should handle url_verification with challenge that is not a string', () => {
+      const event: SlackEvent = {
+        type: 'url_verification',
+        challenge: 12345 as any, // challenge is not a string
+        token: 'test_token',
+      };
+
+      // Should fall through and be treated as unknown/other event type
+      const parsed = parseEvent(event);
+      // The function will continue past the url_verification check
+      expect(parsed.type).toBeDefined();
+    });
+
+    it('should handle event with missing team_id', () => {
+      const event: SlackEvent = {
+        type: 'message',
+        // Missing team_id
+        channel: 'C123456',
+        ts: '1234567890.123456',
+      };
+
+      const parsed = parseEvent(event);
+      // Should return unknown event when team_id is missing
+      expect((parsed as UnknownEvent).type).toBe('message');
+      expect((parsed as UnknownEvent).team_id).toBeUndefined();
+    });
+
+    it('should handle event with team_id that is not a string', () => {
+      const event: SlackEvent = {
+        type: 'message',
+        team_id: 12345 as any, // team_id is not a string
+        channel: 'C123456',
+        ts: '1234567890.123456',
+      };
+
+      const parsed = parseEvent(event);
+      // Should return unknown event when team_id is invalid type
+      expect((parsed as UnknownEvent).type).toBe('message');
+    });
   });
 });
 

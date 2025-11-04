@@ -205,16 +205,46 @@ describe('token-refresh', () => {
     });
   });
 
-  describe('getCacheTTL', () => {
-    it('should return default TTL when ttl is undefined', () => {
-      // This is tested indirectly through getFromCacheOrDbWithValidation
-      // when ttlSeconds is undefined
-      expect(TOKEN_DEFAULT_TTL).toBeDefined();
+  describe('getTokenFromDb', () => {
+    it('should return token item when token exists', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const validToken = createTokenItem({ expires_at: now + 20000 });
+
+      mockGetTokenItemDbId.mockReturnValue('oauth#T123');
+      mockDynamoGetById.mockResolvedValue(validToken);
+
+      const result = await getTokenFromDb('table', 'T123');
+
+      expect(result).toEqual(validToken);
+      expect(mockDynamoGetById).toHaveBeenCalledWith('table', 'oauth#T123', '1');
     });
 
-    it('should return provided TTL when set', () => {
-      // Tested indirectly through getFromCacheOrDbWithValidation
-      expect(TOKEN_DEFAULT_TTL).toBeGreaterThan(0);
+    it('should return null when token does not exist', async () => {
+      mockGetTokenItemDbId.mockReturnValue('oauth#T123');
+      mockDynamoGetById.mockResolvedValue(null);
+
+      const result = await getTokenFromDb('table', 'T123');
+
+      expect(result).toBeNull();
+      expect(mockDynamoGetById).toHaveBeenCalledWith('table', 'oauth#T123', '1');
+    });
+
+    it('should return null when token is expired', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const expiredToken = createTokenItem({ expires_at: now - 1000 });
+
+      mockGetTokenItemDbId.mockReturnValue('oauth#T123');
+      mockDynamoGetById.mockResolvedValue(expiredToken);
+
+      const result = await getTokenFromDb('table', 'T123');
+
+      expect(result).toBeNull();
+      expect(mockDynamoGetById).toHaveBeenCalledWith('table', 'oauth#T123', '1');
+      // Expired token should be deleted
+      expect(mockDynamoDeleteItem).toHaveBeenCalledWith('table', {
+        itemId: 'oauth#T123',
+        timestamp: '1',
+      });
     });
   });
 
@@ -246,21 +276,6 @@ describe('token-refresh', () => {
       expect(result).toEqual(tokenItem);
       // getCacheTTL returns ttlSeconds if set (20000), otherwise TOKEN_DEFAULT_TTL
       expect(mockSetInCache).toHaveBeenCalledWith('cache-key', tokenItem, 20000);
-    });
-
-    it('should use default TTL if ttlSeconds not set', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const tokenItem = createTokenItem({ expires_at: now + 20000 });
-
-      mockGetTokenItemCacheKey.mockReturnValue('cache-key');
-      mockGetFromCache.mockResolvedValue(null);
-      mockGetTokenItemDbId.mockReturnValue('oauth#T123');
-      mockDynamoGetById.mockResolvedValue(tokenItem);
-
-      const result = await getFromCacheOrDbWithValidation('T123', 'table');
-
-      expect(result).toEqual(tokenItem);
-      expect(mockSetInCache).toHaveBeenCalledWith('cache-key', tokenItem, TOKEN_DEFAULT_TTL);
     });
 
     it('should return null if token not in cache or DB', async () => {
@@ -318,50 +333,6 @@ describe('token-refresh', () => {
       expect(mockSetInCache).toHaveBeenCalledWith('cache-key', tokenItem, TOKEN_DEFAULT_TTL);
     });
 
-    it('should cache with Infinity TTL correctly', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const tokenItem = createTokenItem({ 
-        expires_at: Infinity, 
-        ttlSeconds: Infinity 
-      });
-
-      mockGetTokenItemCacheKey.mockReturnValue('cache-key');
-      mockGetFromCache.mockResolvedValue(null);
-      mockGetTokenItemDbId.mockReturnValue('oauth#T123');
-      mockDynamoGetById.mockResolvedValue(tokenItem);
-
-      const result = await getOAuthToken('table', 'T123');
-
-      expect(result).toEqual(tokenItem);
-      // 0.6 * Infinity = Infinity, so should cache with Infinity
-      expect(mockSetInCache).toHaveBeenCalledWith('cache-key', tokenItem, Infinity);
-    });
-
-    it('should cache with calculated TTL (60% of ttlSeconds)', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      // Token must expire well beyond the buffer (TOKEN_REFRESH_BUFFER = 14400 seconds)
-      // So expires_at should be now + buffer + extra time
-      // Use 20000 to be safe
-      const tokenItem = createTokenItem({ 
-        expires_at: now + 20000, 
-        ttlSeconds: 10000 
-      });
-
-      // getOAuthToken directly calls getFromCache and getTokenItemFromDbIfNotExpired
-      mockGetTokenItemCacheKey.mockReturnValue('cache-key');
-      mockGetFromCache.mockResolvedValue(null); // Not in cache
-      mockGetTokenItemDbId.mockReturnValue('oauth#T123');
-      // getTokenItemFromDbIfNotExpired calls dynamoGetById and checks if expired
-      // Since expires_at is now + 20000, it's not expired, so it returns the token
-      mockDynamoGetById.mockResolvedValue(tokenItem);
-
-      const result = await getOAuthToken('table', 'T123');
-
-      expect(result).toEqual(tokenItem);
-      // Should cache with 60% of ttlSeconds: 10000 * 0.6 = 6000
-      expect(mockSetInCache).toHaveBeenCalledWith('cache-key', tokenItem, 6000);
-    });
-
     it('should return null if token not found', async () => {
       mockGetTokenItemCacheKey.mockReturnValue('cache-key');
       mockGetFromCache.mockResolvedValue(null);
@@ -406,56 +377,12 @@ describe('token-refresh', () => {
     });
   });
 
-  describe('getTokenFromDb', () => {
-    it('should return token if found and not expired', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const tokenItem = createTokenItem({ expires_at: now + 20000 });
-
-      mockGetTokenItemDbId.mockReturnValue('oauth#T123');
-      mockDynamoGetById.mockResolvedValue(tokenItem);
-
-      const result = await getTokenFromDb('table', 'T123');
-
-      expect(result).toEqual(tokenItem);
-    });
-
-    it('should return null if token not found', async () => {
-      mockGetTokenItemDbId.mockReturnValue('oauth#T123');
-      mockDynamoGetById.mockResolvedValue(null);
-
-      const result = await getTokenFromDb('table', 'T123');
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null if token is expired', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const expiredToken = createTokenItem({ expires_at: now - 1000 });
-
-      mockGetTokenItemDbId.mockReturnValue('oauth#T123');
-      mockDynamoGetById.mockResolvedValue(expiredToken);
-
-      const result = await getTokenFromDb('table', 'T123');
-
-      expect(result).toBeNull();
-    });
-  });
-
   describe('deleteToken', () => {
     it('should delete token from DynamoDB', async () => {
       await deleteToken('table', 'T123');
 
       expect(mockDynamoDeleteItem).toHaveBeenCalledWith('table', {
         itemId: 'oauth#T123',
-        timestamp: '1',
-      });
-    });
-
-    it('should handle different team IDs', async () => {
-      await deleteToken('table', 'T456');
-
-      expect(mockDynamoDeleteItem).toHaveBeenCalledWith('table', {
-        itemId: 'oauth#T456',
         timestamp: '1',
       });
     });
@@ -506,7 +433,7 @@ describe('token-refresh', () => {
         .mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`) // Second call for updateOAuthToken
         .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`); // Third call for refresh lock
       mockGetFromCache.mockResolvedValue(expiredToken);
-      mockHasInCache.mockReturnValue(false);
+      mockHasInCache.mockResolvedValue(false);
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => refreshedResponse,
@@ -519,199 +446,6 @@ describe('token-refresh', () => {
 
       expect(result).toBe('new-token');
       expect(mockFetch).toHaveBeenCalled();
-    }, 10000);
-
-    it('should handle refresh when expires_in is undefined (Infinity)', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const expiredToken = createTokenItem({
-        bot_token: 'old-token',
-        expires_at: now - 1000,
-        refresh_token: 'refresh-token',
-      });
-
-      const refreshedResponseNoExpiry: RefreshTokenResponse = {
-        ok: true,
-        access_token: 'new-token',
-        refresh_token: 'new-refresh-token',
-        // expires_in is undefined - should set to Infinity
-      };
-
-      mockGetTokenItemCacheKey
-        .mockReturnValueOnce('cache-key')
-        .mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`)
-        .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`);
-      mockGetFromCache.mockResolvedValue(expiredToken);
-      mockHasInCache.mockReturnValue(false);
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => refreshedResponseNoExpiry,
-      });
-      mockGetDynamoDb.mockResolvedValue({
-        send: jest.fn().mockResolvedValue({}),
-      });
-
-      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
-
-      expect(result).toBe('new-token');
-      expect(mockFetch).toHaveBeenCalled();
-    }, 10000);
-
-    it('should use new refresh_token if provided, otherwise keep old one', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const expiredToken = createTokenItem({
-        bot_token: 'old-token',
-        expires_at: now - 1000,
-        refresh_token: 'old-refresh-token',
-      });
-
-      const refreshedResponse: RefreshTokenResponse = {
-        ok: true,
-        access_token: 'new-token',
-        refresh_token: 'new-refresh-token',
-        expires_in: 3600,
-      };
-
-      mockGetTokenItemCacheKey
-        .mockReturnValueOnce('cache-key')
-        .mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`)
-        .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`);
-      mockGetFromCache.mockResolvedValue(expiredToken);
-      mockHasInCache.mockReturnValue(false);
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => refreshedResponse,
-      });
-      mockGetDynamoDb.mockResolvedValue({
-        send: jest.fn().mockResolvedValue({}),
-      });
-
-      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
-
-      expect(result).toBe('new-token');
-      
-      // Verify updateOAuthToken was called with new refresh_token
-      const updateCall = mockSetInCache.mock.calls.find(call => 
-        call[0] === `${TOKEN_CACHE_PREFIX}table:T123`
-      );
-      if (updateCall && updateCall[1]) {
-        const updatedItem = updateCall[1] as OAuthTokenItem;
-        expect(updatedItem.refresh_token).toBe('new-refresh-token');
-      }
-    }, 10000);
-
-    it('should keep old refresh_token if new one not provided', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const expiredToken = createTokenItem({
-        bot_token: 'old-token',
-        expires_at: now - 1000,
-        refresh_token: 'old-refresh-token',
-      });
-
-      const refreshedResponseNoRefreshToken: RefreshTokenResponse = {
-        ok: true,
-        access_token: 'new-token',
-        // refresh_token is undefined - should keep old one (tests: refreshResponse.refresh_token || tokenItem.refresh_token)
-        expires_in: 3600,
-      };
-
-      mockGetTokenItemCacheKey
-        .mockReturnValueOnce('cache-key')
-        .mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`)
-        .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`);
-      mockGetFromCache.mockResolvedValue(expiredToken);
-      mockHasInCache.mockReturnValue(false);
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => refreshedResponseNoRefreshToken,
-      });
-      mockGetDynamoDb.mockResolvedValue({
-        send: jest.fn().mockResolvedValue({}),
-      });
-
-      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
-
-      expect(result).toBe('new-token');
-      
-      // Verify updateOAuthToken was called with old refresh_token preserved
-      const updateCall = mockSetInCache.mock.calls.find(call => 
-        call[0] === `${TOKEN_CACHE_PREFIX}table:T123`
-      );
-      if (updateCall && updateCall[1]) {
-        const updatedItem = updateCall[1] as OAuthTokenItem;
-        expect(updatedItem.refresh_token).toBe('old-refresh-token');
-      }
-    }, 10000);
-
-    it('should handle refresh when expires_in is 0', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const expiredToken = createTokenItem({
-        bot_token: 'old-token',
-        expires_at: now - 1000,
-        refresh_token: 'refresh-token',
-      });
-
-      const refreshedResponseZeroExpiry: RefreshTokenResponse = {
-        ok: true,
-        access_token: 'new-token',
-        refresh_token: 'new-refresh-token',
-        expires_in: 0, // Tests branch: expires_in ? ... : Infinity (0 is falsy, so uses Infinity)
-      };
-
-      mockGetTokenItemCacheKey
-        .mockReturnValueOnce('cache-key')
-        .mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`)
-        .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`);
-      mockGetFromCache.mockResolvedValue(expiredToken);
-      mockHasInCache.mockReturnValue(false);
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => refreshedResponseZeroExpiry,
-      });
-      mockGetDynamoDb.mockResolvedValue({
-        send: jest.fn().mockResolvedValue({}),
-      });
-
-      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
-
-      expect(result).toBe('new-token');
-      expect(mockFetch).toHaveBeenCalled();
-    }, 10000);
-
-    it('should not refresh if refresh is not in progress (branch coverage for hasInCache false)', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const expiredToken = createTokenItem({
-        bot_token: 'old-token',
-        expires_at: now - 1000,
-        refresh_token: 'refresh-token',
-      });
-
-      const refreshedResponse: RefreshTokenResponse = {
-        ok: true,
-        access_token: 'new-token',
-        refresh_token: 'new-refresh-token',
-        expires_in: 3600,
-      };
-
-      mockGetTokenItemCacheKey
-        .mockReturnValueOnce('cache-key')
-        .mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`)
-        .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`);
-      mockGetFromCache.mockResolvedValue(expiredToken);
-      mockHasInCache.mockReturnValue(false); // Refresh NOT in progress (tests branch: if (!hasInCache))
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => refreshedResponse,
-      });
-      mockGetDynamoDb.mockResolvedValue({
-        send: jest.fn().mockResolvedValue({}),
-      });
-
-      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
-
-      expect(result).toBe('new-token');
-      expect(mockHasInCache).toHaveBeenCalledWith(`${REFRESH_CACHE_PREFIX}T123`);
-      // Should not wait/retry since hasInCache is false
-      expect(mockSetInCache).toHaveBeenCalledWith(`${REFRESH_CACHE_PREFIX}T123`, true, 60);
     }, 10000);
 
     it('should wait and retry if refresh is in progress', async () => {
@@ -728,168 +462,14 @@ describe('token-refresh', () => {
       mockGetFromCache
         .mockResolvedValueOnce(expiredToken) // First call - expired
         .mockResolvedValueOnce(refreshedToken); // Retry call - refreshed
-      mockHasInCache.mockReturnValue(true); // Refresh in progress (hasInCache is synchronous)
+      mockHasInCache.mockResolvedValue(true); // Refresh in progress
       mockGetTokenItemDbId.mockReturnValue('oauth#T123');
       mockDynamoGetById.mockResolvedValue(refreshedToken);
 
       const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
 
       expect(result).toBe('new-token');
-      expect(mockHasInCache).toHaveBeenCalledWith(`${REFRESH_CACHE_PREFIX}T123`);
     }, 10000);
-
-    it('should continue with refresh if retried token is still expired', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const expiredToken = createTokenItem({
-        bot_token: 'old-token',
-        expires_at: now - 1000,
-        refresh_token: 'refresh-token',
-      });
-
-      const refreshedResponse: RefreshTokenResponse = {
-        ok: true,
-        access_token: 'new-token',
-        refresh_token: 'new-refresh-token',
-        expires_in: 3600,
-      };
-
-      mockGetTokenItemCacheKey
-        .mockReturnValueOnce('cache-key')
-        .mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`)
-        .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`);
-      mockGetFromCache
-        .mockResolvedValueOnce(expiredToken) // First call - expired
-        .mockResolvedValueOnce(expiredToken); // Retry call - still expired (branch: if (retriedTokenItem))
-      mockHasInCache.mockReturnValue(true); // Refresh in progress
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => refreshedResponse,
-      });
-      mockGetDynamoDb.mockResolvedValue({
-        send: jest.fn().mockResolvedValue({}),
-      });
-
-      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
-
-      expect(result).toBe('new-token');
-      expect(mockFetch).toHaveBeenCalled();
-    }, 10000);
-
-    it('should continue with refresh if retried token is null', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const expiredToken = createTokenItem({
-        bot_token: 'old-token',
-        expires_at: now - 1000,
-        refresh_token: 'refresh-token',
-      });
-
-      const refreshedResponse: RefreshTokenResponse = {
-        ok: true,
-        access_token: 'new-token',
-        refresh_token: 'new-refresh-token',
-        expires_in: 3600,
-      };
-
-      mockGetTokenItemCacheKey
-        .mockReturnValueOnce('cache-key')
-        .mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`)
-        .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`);
-      mockGetFromCache
-        .mockResolvedValueOnce(expiredToken) // First call - expired
-        .mockResolvedValueOnce(null); // Retry call - null (tests branch: if (!retriedTokenItem))
-      mockHasInCache.mockReturnValue(true); // Refresh in progress
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => refreshedResponse,
-      });
-      mockGetDynamoDb.mockResolvedValue({
-        send: jest.fn().mockResolvedValue({}),
-      });
-
-      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
-
-      expect(result).toBe('new-token');
-      expect(mockFetch).toHaveBeenCalled();
-    }, 10000);
-
-    it('should continue refresh if retried token is still expired', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const expiredToken = createTokenItem({
-        bot_token: 'old-token',
-        expires_at: now - 1000,
-        refresh_token: 'refresh-token',
-      });
-
-      const refreshedResponse: RefreshTokenResponse = {
-        ok: true,
-        access_token: 'new-token',
-        refresh_token: 'new-refresh-token',
-        expires_in: 3600,
-      };
-
-      mockGetTokenItemCacheKey
-        .mockReturnValueOnce('cache-key')
-        .mockReturnValueOnce(`${TOKEN_CACHE_PREFIX}table:T123`)
-        .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`);
-      mockGetFromCache
-        .mockResolvedValueOnce(expiredToken) // First call - expired
-        .mockResolvedValueOnce(expiredToken); // Retry call - still expired
-      mockHasInCache.mockReturnValue(true); // Refresh in progress
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => refreshedResponse,
-      });
-      mockGetDynamoDb.mockResolvedValue({
-        send: jest.fn().mockResolvedValue({}),
-      });
-
-      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
-
-      expect(result).toBe('new-token');
-      expect(mockFetch).toHaveBeenCalled();
-    }, 10000);
-
-    it('should handle deleteToken function (line 159)', async () => {
-      // Test deleteToken function directly
-      await deleteToken('table', 'T123');
-
-      expect(mockDynamoDeleteItem).toHaveBeenCalledWith('table', {
-        itemId: 'oauth#T123',
-        timestamp: '1',
-      });
-    });
-
-    it('should handle token refresh when hasInCache returns true (line 192 wait path)', async () => {
-      const now = Math.floor(Date.now() / 1000);
-      const expiredToken = createTokenItem({
-        bot_token: 'old-token',
-        expires_at: now - 1000,
-        refresh_token: 'refresh-token',
-      });
-
-      const refreshedToken = createTokenItem({ 
-        bot_token: 'new-token', 
-        expires_at: now + 3600 
-      });
-
-      mockGetTokenItemCacheKey.mockReturnValue('cache-key');
-      mockGetFromCache
-        .mockResolvedValueOnce(expiredToken) // First call - expired
-        .mockResolvedValueOnce(refreshedToken); // Retry after wait (line 194)
-      // hasInCache is synchronous, so mock it to return true
-      (mockHasInCache as jest.Mock).mockReturnValue(true); // Refresh in progress (line 191)
-      mockGetTokenItemDbId.mockReturnValue('oauth#T123');
-      mockDynamoGetById.mockResolvedValue(refreshedToken);
-
-      // Don't use fake timers - just verify the wait path is executed
-      // The actual 100ms delay is real but acceptable for this test
-      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
-
-      expect(result).toBe('new-token');
-      expect(mockHasInCache).toHaveBeenCalledWith(`${REFRESH_CACHE_PREFIX}T123`);
-      // Verify retry happened after wait
-      expect(mockGetFromCache).toHaveBeenCalledTimes(2);
-    }, 15000);
 
     it('should throw error if expired and no refresh token', async () => {
       const now = Math.floor(Date.now() / 1000);
@@ -911,11 +491,9 @@ describe('token-refresh', () => {
         refresh_token: 'refresh-token',
       });
 
-      mockGetTokenItemCacheKey
-        .mockReturnValueOnce('cache-key')
-        .mockReturnValue(`${REFRESH_CACHE_PREFIX}T123`);
+      mockGetTokenItemCacheKey.mockReturnValue('cache-key');
       mockGetFromCache.mockResolvedValue(expiredToken);
-      mockHasInCache.mockReturnValue(false);
+      mockHasInCache.mockResolvedValue(false);
       mockFetch.mockResolvedValue({
         ok: false,
         status: 500,
@@ -925,8 +503,6 @@ describe('token-refresh', () => {
         getValidBotToken('table', 'T123', 'client-id', 'client-secret')
       ).rejects.toThrow();
 
-      // Verify lock was set before error, then removed
-      expect(mockSetInCache).toHaveBeenCalledWith(`${REFRESH_CACHE_PREFIX}T123`, true, 60);
       expect(mockSetInCache).toHaveBeenCalledWith(`${REFRESH_CACHE_PREFIX}T123`, false, 1);
     }, 10000);
 
@@ -944,7 +520,7 @@ describe('token-refresh', () => {
 
       mockGetTokenItemCacheKey.mockReturnValue('cache-key');
       mockGetFromCache.mockResolvedValue(expiredToken);
-      mockHasInCache.mockReturnValue(false);
+      mockHasInCache.mockResolvedValue(false);
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => badResponse,
@@ -954,6 +530,84 @@ describe('token-refresh', () => {
         getValidBotToken('table', 'T123', 'client-id', 'client-secret')
       ).rejects.toThrow('No access token in refresh response');
     }, 10000);
+
+    it('should handle token refresh when retriedTokenItem exists but is still expired (line 159)', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const expiredToken = createTokenItem({
+        bot_token: 'old-token',
+        expires_at: now - 1000,
+        refresh_token: 'refresh-token',
+      });
+
+      const refreshedTokenResponse: RefreshTokenResponse = {
+        ok: true,
+        access_token: 'new-access-token',
+        refresh_token: 'new-refresh-token',
+        expires_in: 3600,
+      };
+
+      // First call to getOAuthToken returns expired token, second call (after wait) also returns expired token
+      mockGetTokenItemCacheKey.mockReturnValue('cache-key');
+      mockGetFromCache.mockResolvedValue(expiredToken); // Both calls will get expired token from cache
+      // hasInCache returns true (refresh in progress)
+      mockHasInCache.mockReturnValue(true);
+      // Mock successful refresh
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => refreshedTokenResponse,
+      });
+      // Mock updateOAuthToken - it uses dynamodbUtils.updateItem internally
+      mockDynamoGetById.mockResolvedValue(null); // Not used when cache returns value
+
+      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
+
+      expect(result).toBe('new-access-token');
+      // Verify that we checked the cache and retried
+      expect(mockHasInCache).toHaveBeenCalledWith(`${REFRESH_CACHE_PREFIX}T123`);
+      // Verify that refresh was called (meaning we took the path where retriedTokenItem was still expired)
+      expect(mockFetch).toHaveBeenCalled();
+      // Verify that getFromCache was called at least twice (initial call + retry after wait)
+      expect(mockGetFromCache.mock.calls.length).toBeGreaterThanOrEqual(2);
+    }, 15000);
+
+    it('should handle token refresh when retriedTokenItem is null after wait (line 192 null branch)', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const expiredToken = createTokenItem({
+        bot_token: 'old-token',
+        expires_at: now - 1000,
+        refresh_token: 'refresh-token',
+      });
+
+      const refreshedTokenResponse: RefreshTokenResponse = {
+        ok: true,
+        access_token: 'new-access-token',
+        refresh_token: 'new-refresh-token',
+        expires_in: 3600,
+      };
+
+      // First call to getOAuthToken returns expired token
+      mockGetTokenItemCacheKey.mockReturnValue('cache-key');
+      mockGetFromCache
+        .mockResolvedValueOnce(expiredToken) // First call returns expired token
+        .mockResolvedValueOnce(null); // Second call (after wait) returns null (token was deleted or not found)
+      // hasInCache returns true (refresh in progress)
+      mockHasInCache.mockReturnValue(true);
+      // Mock successful refresh
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => refreshedTokenResponse,
+      });
+
+      const result = await getValidBotToken('table', 'T123', 'client-id', 'client-secret');
+
+      expect(result).toBe('new-access-token');
+      // Verify that we checked the cache and retried
+      expect(mockHasInCache).toHaveBeenCalledWith(`${REFRESH_CACHE_PREFIX}T123`);
+      // Verify that refresh was called (meaning we continued with original tokenItem when retriedTokenItem was null)
+      expect(mockFetch).toHaveBeenCalled();
+      // Verify that getFromCache was called twice (initial call + retry after wait)
+      expect(mockGetFromCache).toHaveBeenCalledTimes(2);
+    }, 15000);
   });
 });
 

@@ -1,5 +1,6 @@
 import { processFile, processMessageFiles } from '../file-processor';
 import * as shared from 'mnemosyne-slack-shared';
+import { Readable } from 'stream';
 
 jest.mock('mnemosyne-slack-shared', () => ({
   ...jest.requireActual('mnemosyne-slack-shared'),
@@ -34,21 +35,21 @@ jest.mock('@aws-sdk/client-s3', () => ({
   PutObjectCommand: jest.fn((params: any) => ({ params })),
 }));
 
-// Mock stream module
-jest.mock('stream', () => ({
-  PassThrough: jest.fn(function() {
-    return {
-      pipe: jest.fn().mockReturnThis(),
-      on: jest.fn(),
-      end: jest.fn(),
-      destroy: jest.fn(),
-      destroyed: false,
-      write: jest.fn().mockReturn(true),
-      writable: true,
-      readable: true,
-    };
-  }),
+// Mock lib-storage Upload
+const mockUploadDone = jest.fn().mockResolvedValue({});
+const mockUploadAbort = jest.fn().mockResolvedValue({});
+const mockUploadConstructor = jest.fn(() => ({
+  done: mockUploadDone,
+  abort: mockUploadAbort,
 }));
+
+jest.mock('@aws-sdk/lib-storage', () => ({
+  Upload: mockUploadConstructor,
+}));
+
+// Mock stream module
+// Note: We can't mock stream module without breaking AWS SDK
+// The PassThrough usage will work with the real stream module
 
 describe('file-processor', () => {
   const mockGetValidBotToken = shared.getValidBotToken as jest.Mock;
@@ -63,6 +64,9 @@ describe('file-processor', () => {
     jest.clearAllMocks();
     mockGetValidBotToken.mockResolvedValue('bot-token-123');
     mockS3Send.mockResolvedValue({});
+    mockUploadDone.mockResolvedValue({});
+    mockUploadAbort.mockResolvedValue({});
+    mockUploadConstructor.mockClear();
   });
 
   describe('processFile', () => {
@@ -99,17 +103,11 @@ describe('file-processor', () => {
         end: jest.Mock;
       }
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -137,7 +135,7 @@ describe('file-processor', () => {
 
       expect(s3Key).toBe('slack/T123/C456/1234567890.123456/file1');
       expect(mockHttpsRequest).toHaveBeenCalled();
-      expect(mockS3Send).toHaveBeenCalled();
+      expect(mockUploadConstructor).toHaveBeenCalled();
     });
 
     it('should retry on failure with exponential backoff', async () => {
@@ -154,17 +152,11 @@ describe('file-processor', () => {
         end: jest.Mock;
       }
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -180,7 +172,7 @@ describe('file-processor', () => {
         return mockRequest;
       });
 
-      mockS3Send
+      mockUploadDone
         .mockRejectedValueOnce(new Error('S3 error 1'))
         .mockRejectedValueOnce(new Error('S3 error 2'))
         .mockResolvedValueOnce({});
@@ -198,8 +190,8 @@ describe('file-processor', () => {
       );
 
       expect(s3Key).toBe('slack/T123/C456/1234567890.123456/file1');
-      // S3 is called multiple times due to retries
-      expect(mockS3Send.mock.calls.length).toBeGreaterThanOrEqual(1);
+      // Upload is called multiple times due to retries
+      expect(mockUploadConstructor.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
 
     it('should throw error if all retries fail', async () => {
@@ -210,17 +202,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -234,7 +220,11 @@ describe('file-processor', () => {
         return mockRequest;
       });
 
-      mockS3Send.mockRejectedValue(new Error('S3 error'));
+      // Mock Upload.done() to fail 3 times (max retries)
+      mockUploadDone
+        .mockRejectedValueOnce(new Error('S3 error'))
+        .mockRejectedValueOnce(new Error('S3 error'))
+        .mockRejectedValueOnce(new Error('S3 error'));
 
       await expect(
         processFile(
@@ -257,17 +247,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -302,13 +286,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 404,
         headers: {},
-        on: jest.fn(),
-        pipe: jest.fn(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -366,17 +348,11 @@ describe('file-processor', () => {
       };
 
       // Mock successful HTTPS requests
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -439,17 +415,11 @@ describe('file-processor', () => {
       };
 
       // Mock successful HTTPS request for file1
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -587,17 +557,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -611,7 +575,11 @@ describe('file-processor', () => {
         return mockRequest;
       });
 
-      mockS3Send.mockRejectedValue(new Error('S3 upload failed'));
+      // Mock Upload.done() to fail (will trigger retries, then throw after max retries)
+      mockUploadDone
+        .mockRejectedValueOnce(new Error('S3 upload failed'))
+        .mockRejectedValueOnce(new Error('S3 upload failed'))
+        .mockRejectedValueOnce(new Error('S3 upload failed'));
 
       await expect(
         processFile(
@@ -633,17 +601,11 @@ describe('file-processor', () => {
         url_private: 'https://files.slack.com/files-pri/file1',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: {}, // No content-type header
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -667,9 +629,9 @@ describe('file-processor', () => {
         mockS3Client
       );
 
-      expect(mockS3Send).toHaveBeenCalled();
-      const putCommand = mockS3Send.mock.calls[0][0];
-      expect(putCommand.params.ContentType).toBe('application/octet-stream');
+      expect(mockUploadConstructor).toHaveBeenCalled();
+      const uploadCall = ((mockUploadConstructor as jest.Mock).mock.calls[0] as any)[0];
+      expect(uploadCall.params.ContentType).toBe('application/octet-stream');
     });
 
     it('should handle files with missing name', async () => {
@@ -679,17 +641,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -724,17 +680,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -749,7 +699,7 @@ describe('file-processor', () => {
       });
 
       // First two attempts fail, third succeeds
-      mockS3Send
+      mockUploadDone
         .mockRejectedValueOnce(new Error('S3 error 1'))
         .mockRejectedValueOnce(new Error('S3 error 2'))
         .mockResolvedValueOnce({});
@@ -765,7 +715,7 @@ describe('file-processor', () => {
       );
 
       expect(s3Key).toBe('slack/T123/C456/1234567890.123456/file1');
-      expect(mockS3Send).toHaveBeenCalledTimes(3);
+      expect(mockUploadConstructor).toHaveBeenCalledTimes(3);
     });
 
     it('should reuse cached modules when processing multiple files', async () => {
@@ -783,17 +733,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -841,17 +785,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -899,10 +837,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 401,
         headers: {},
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -937,10 +876,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 500,
         headers: {},
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -975,15 +915,11 @@ describe('file-processor', () => {
         // No mimetype - should use response header
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'image/jpeg' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -1007,9 +943,9 @@ describe('file-processor', () => {
         mockS3Client
       );
 
-      expect(mockS3Send).toHaveBeenCalled();
-      const putCommand = mockS3Send.mock.calls[0][0];
-      expect(putCommand.params.ContentType).toBe('image/jpeg');
+      expect(mockUploadConstructor).toHaveBeenCalled();
+      const uploadCall = ((mockUploadConstructor as jest.Mock).mock.calls[0] as any)[0];
+      expect(uploadCall.params.ContentType).toBe('image/jpeg');
     });
 
     it('should handle URL with query parameters', async () => {
@@ -1020,17 +956,11 @@ describe('file-processor', () => {
         mimetype: 'text/plain',
       };
 
-      const mockResponse = {
+      const mockStream = new Readable({ read() {} });
+      const mockResponse = Object.assign(mockStream, {
         statusCode: 200,
         headers: { 'content-type': 'text/plain' },
-        on: jest.fn((event: string, handler: Function) => {
-          if (event === 'end') {
-            setImmediate(() => handler());
-          }
-        }),
-        pipe: jest.fn().mockReturnThis(),
-        resume: jest.fn(),
-      };
+      } as any);
 
       const mockRequest: MockRequest = {
         on: jest.fn((_event: string, _handler: Function) => {
@@ -1061,6 +991,235 @@ describe('file-processor', () => {
         }),
         expect.any(Function)
       );
+    });
+
+    it('should handle request timeout before upload started', async () => {
+      const file = {
+        id: 'file1',
+        name: 'test.txt',
+        url_private: 'https://files.slack.com/files-pri/test.txt',
+        mimetype: 'text/plain',
+      } as any;
+
+      const mockRequest: any = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'timeout') {
+            // Simulate timeout event before upload started
+            setImmediate(() => handler());
+          }
+          return mockRequest;
+        }),
+        destroy: jest.fn(),
+        end: jest.fn(),
+      };
+
+      mockHttpsRequest.mockImplementation((_options: any, _callback: Function) => {
+        // Don't call callback (simulating timeout before response)
+        return mockRequest;
+      });
+
+      await expect(
+        processFile(
+          file,
+          'T123',
+          'C456',
+          '1234567890.123456',
+          'bot-token',
+          'test-bucket',
+          mockS3Client
+        )
+      ).rejects.toThrow('Request timeout');
+
+      expect(mockRequest.destroy).toHaveBeenCalled();
+      expect(mockRequest.on).toHaveBeenCalledWith('timeout', expect.any(Function));
+    });
+
+    it('should handle request timeout after upload started', async () => {
+      const file = {
+        id: 'file1',
+        name: 'test.txt',
+        url_private: 'https://files.slack.com/files-pri/test.txt',
+        mimetype: 'text/plain',
+      } as any;
+
+      const { Readable } = require('stream');
+      const mockResponse = new Readable({
+        read() {
+          this.push('test data');
+          this.push(null);
+        },
+      });
+      mockResponse.statusCode = 200;
+      mockResponse.headers = { 'content-type': 'text/plain' };
+
+      let timeoutHandler: Function | undefined;
+      const mockRequest: any = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'timeout') {
+            timeoutHandler = handler;
+          }
+          return mockRequest;
+        }),
+        destroy: jest.fn(),
+        end: jest.fn(),
+      };
+
+      // Don't let upload.done() resolve - we want timeout to reject first
+      mockUploadDone.mockImplementation(() => new Promise(() => {})); // Never resolves
+
+      mockHttpsRequest.mockImplementation((_options: any, callback: Function) => {
+        // Call callback to start upload, then trigger timeout
+        setImmediate(() => {
+          callback(mockResponse);
+          // Trigger timeout after upload started
+          setImmediate(() => {
+            if (timeoutHandler) {
+              timeoutHandler();
+            }
+          });
+        });
+        return mockRequest;
+      });
+
+      await expect(
+        processFile(
+          file,
+          'T123',
+          'C456',
+          '1234567890.123456',
+          'bot-token',
+          'test-bucket',
+          mockS3Client
+        )
+      ).rejects.toThrow('Request timeout after upload started');
+
+      expect(mockRequest.destroy).toHaveBeenCalled();
+      expect(mockUploadAbort).toHaveBeenCalled();
+    });
+
+    it('should handle request error after upload started', async () => {
+      const file = {
+        id: 'file1',
+        name: 'test.txt',
+        url_private: 'https://files.slack.com/files-pri/test.txt',
+        mimetype: 'text/plain',
+      } as any;
+
+      const { Readable } = require('stream');
+      const mockResponse = new Readable({
+        read() {
+          this.push('test data');
+          this.push(null);
+        },
+      });
+      mockResponse.statusCode = 200;
+      mockResponse.headers = { 'content-type': 'text/plain' };
+
+      let errorHandler: Function | undefined;
+      const mockRequest: any = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'error') {
+            errorHandler = handler;
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      // Don't let upload.done() resolve - we want error to reject first
+      mockUploadDone.mockImplementation(() => new Promise(() => {})); // Never resolves
+
+      mockHttpsRequest.mockImplementation((_options: any, callback: Function) => {
+        // Call callback to start upload, then trigger error
+        setImmediate(() => {
+          callback(mockResponse);
+          // Trigger error after upload started
+          setImmediate(() => {
+            if (errorHandler) {
+              errorHandler(new Error('Network error'));
+            }
+          });
+        });
+        return mockRequest;
+      });
+
+      await expect(
+        processFile(
+          file,
+          'T123',
+          'C456',
+          '1234567890.123456',
+          'bot-token',
+          'test-bucket',
+          mockS3Client
+        )
+      ).rejects.toThrow('Request error after upload started');
+
+      expect(mockUploadAbort).toHaveBeenCalled();
+    });
+
+    it('should handle upload abort error gracefully', async () => {
+      const file = {
+        id: 'file1',
+        name: 'test.txt',
+        url_private: 'https://files.slack.com/files-pri/test.txt',
+        mimetype: 'text/plain',
+      } as any;
+
+      const { Readable } = require('stream');
+      const mockResponse = new Readable({
+        read() {
+          this.push('test data');
+          this.push(null);
+        },
+      });
+      mockResponse.statusCode = 200;
+      mockResponse.headers = { 'content-type': 'text/plain' };
+
+      let errorHandler: Function | undefined;
+      const mockRequest: any = {
+        on: jest.fn((event: string, handler: Function) => {
+          if (event === 'error') {
+            errorHandler = handler;
+          }
+          return mockRequest;
+        }),
+        end: jest.fn(),
+      };
+
+      // Don't let upload.done() resolve - we want error to reject first
+      mockUploadDone.mockImplementation(() => new Promise(() => {})); // Never resolves
+      // Mock upload.abort() to reject
+      mockUploadAbort.mockRejectedValueOnce(new Error('Abort failed'));
+
+      mockHttpsRequest.mockImplementation((_options: any, callback: Function) => {
+        setImmediate(() => {
+          callback(mockResponse);
+          // Trigger error after upload started
+          setImmediate(() => {
+            if (errorHandler) {
+              errorHandler(new Error('Network error'));
+            }
+          });
+        });
+        return mockRequest;
+      });
+
+      // Should not throw abort error, only the original error
+      await expect(
+        processFile(
+          file,
+          'T123',
+          'C456',
+          '1234567890.123456',
+          'bot-token',
+          'test-bucket',
+          mockS3Client
+        )
+      ).rejects.toThrow('Request error after upload started');
+
+      // Abort should have been called (even if it failed, error is ignored)
+      expect(mockUploadAbort).toHaveBeenCalled();
     });
   });
 });
