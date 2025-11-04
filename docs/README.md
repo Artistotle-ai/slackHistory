@@ -29,7 +29,7 @@ The Get Started guide walks you through the complete setup process from deployme
 - **[Data Schema](requirements/requirements.md)** - DynamoDB item structure and key patterns
 
 ### Development
-- **[Build Architecture](development/BUILD_EXPLAINED.md)** - Build system and TypeScript configuration
+- **[Build Architecture](development/build.md)** - Build system and TypeScript configuration
 - **[Development Workflow](development/dev-workflow.md)** - Watch mode and local development
 
 ### Slack Integration
